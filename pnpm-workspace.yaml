@@ -1,0 +1,7 @@
+allowBuilds:
+  esbuild: true
+  sharp: false
+  supabase: true
+  unrs-resolver: false
+minimumReleaseAgeExclude:
+  - '@typescript-eslint/parser@8.74.0'
