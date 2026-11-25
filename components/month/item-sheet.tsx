@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Delete, History } from "lucide-react";
+import { History } from "lucide-react";
 import type { Category, Item, Month, NameMemory } from "@/lib/dal/types";
 import { createItem, deleteItem, updateItem, type ItemInput } from "@/lib/actions/items";
 import { creditBillMonthFor } from "@/lib/domain/billing";
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { useIsDesktop } from "@/lib/hooks";
 import { CategoryIcon } from "./category-badge";
 import { cn } from "@/lib/utils";
+import { Money } from "@/components/money";
 
 export type ItemSheetTarget = { mode: "add" } | { mode: "edit"; item: Item; hasChildren: boolean };
 
@@ -36,6 +37,7 @@ export function ItemSheet(props: Props) {
   const isDesktop = useIsDesktop();
   const { target, onClose } = props;
   const dirtyRef = useRef(false);
+  const amountRef = useRef<HTMLInputElement>(null);
   // Closing by backdrop, swipe or Esc must not silently drop what was typed.
   const requestClose = () => {
     if (dirtyRef.current && !window.confirm("Discard this item? What you typed will be lost.")) return;
@@ -45,6 +47,8 @@ export function ItemSheet(props: Props) {
     <Sheet open={target !== null} onOpenChange={(o) => !o && requestClose()}>
       <SheetContent
         side={isDesktop ? "right" : "bottom"}
+        // A new item starts at the amount, so the keyboard comes up ready for digits.
+        initialFocus={target?.mode === "add" ? amountRef : true}
         className={cn(
           "gap-0 overflow-y-auto overscroll-contain",
           isDesktop ? "w-[420px] bg-card sm:max-w-[420px]" : "max-h-[94dvh] rounded-t-3xl border-t-0 bg-card pb-[env(safe-area-inset-bottom)] ring-1 ring-border",
@@ -55,8 +59,8 @@ export function ItemSheet(props: Props) {
             key={target.mode === "edit" ? target.item.id : "add"}
             {...props}
             target={target}
-            isDesktop={isDesktop}
             dirtyRef={dirtyRef}
+            amountRef={amountRef}
           />
         )}
       </SheetContent>
@@ -70,6 +74,18 @@ function toDate(iso: string) {
 }
 function fromDate(d: Date) {
   return isoDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+/**
+ * Keeps the amount field to what parseAmount accepts: digits, one comma or point with up to
+ * two decimals, and a leading minus for money back. Pasted "€ 1 234,50" becomes "1234,50".
+ */
+function cleanAmount(raw: string) {
+  const negative = raw.trimStart().startsWith("-");
+  const [whole, ...rest] = raw.replace(/[^\d.,]/g, "").split(/([.,])/);
+  const sep = rest[0] ?? "";
+  const frac = rest.slice(1).join("").replace(/[.,]/g, "").slice(0, 2);
+  return `${negative ? "-" : ""}${whole.slice(0, 9)}${sep}${frac}`;
 }
 
 /** Default date for a new item: today if viewing this month, otherwise the 1st of the viewed month. */
@@ -87,9 +103,13 @@ function ItemForm({
   availableCents,
   forecastCents,
   applyOptimistic,
-  isDesktop,
   dirtyRef,
-}: Props & { target: ItemSheetTarget; isDesktop: boolean; dirtyRef: React.RefObject<boolean> }) {
+  amountRef,
+}: Props & {
+  target: ItemSheetTarget;
+  dirtyRef: React.RefObject<boolean>;
+  amountRef: React.RefObject<HTMLInputElement | null>;
+}) {
   const editing = target.mode === "edit" ? target.item : null;
   const isBillItem = !!editing && (!!editing.billId || editing.isCreditBill || (target.mode === "edit" && target.hasChildren));
   const wasCardPurchase = !!editing?.parentItemId;
@@ -163,26 +183,10 @@ function ItemForm({
     return list.slice(0, q ? 5 : 6);
   }, [name, names]);
 
-  // Hardware keyboard drives the keypad on desktop when the name field isn't focused.
-  useEffect(() => {
-    if (!isDesktop) return;
-    const onKey = (e: KeyboardEvent) => {
-      const el = document.activeElement as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
-      if (/^[0-9.,-]$/.test(e.key)) press(e.key);
-      else if (e.key === "Backspace") press("back");
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
-
-  function press(key: string) {
-    setAmount((a) => {
-      if (key === "back") return a.slice(0, -1);
-      if (key === "-") return a.startsWith("-") ? a.slice(1) : `-${a}`;
-      const nextVal = key === "," || key === "." ? (/[.,]/.test(a) ? a : `${a || "0"},`) : a + key;
-      return parseAmount(nextVal) !== null || /^-?\d*[.,]?$/.test(nextVal) ? nextVal : a;
-    });
+  const negative = amount.startsWith("-");
+  function flipSign() {
+    setAmount((a) => (a.startsWith("-") ? a.slice(1) : `-${a}`));
+    amountRef.current?.focus();
   }
 
   function pickSuggestion(n: NameMemory) {
@@ -262,8 +266,6 @@ function ItemForm({
     });
   }
 
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "back"];
-
   return (
     <>
       <SheetHeader className="px-4 pt-4 pb-0">
@@ -272,34 +274,66 @@ function ItemForm({
       </SheetHeader>
 
       <div className="flex flex-col gap-4 px-4 pt-3 pb-4">
-        {/* The amount, set like the "Available now" figure on the month screen. */}
+        {/* The amount, set like the "Available now" figure on the month screen, and typed in place. */}
         <div>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <i
-              className={cn(
-                "size-1.5 rounded-full",
-                cents !== null && cents < 0 ? "bg-positive" : onCard ? "bg-muted-foreground" : "bg-signal",
-              )}
-            />
-            {cents !== null && cents < 0 ? "Money back" : onCard ? "Card purchase" : "Expense"}
-          </p>
-          <p
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <p className="flex items-center gap-1.5">
+              <i
+                className={cn(
+                  "size-1.5 rounded-full",
+                  negative ? "bg-positive" : onCard ? "bg-muted-foreground" : "bg-signal",
+                )}
+              />
+              {negative ? "Money back" : onCard ? "Card purchase" : "Expense"}
+            </p>
+            <button
+              type="button"
+              onClick={flipSign}
+              aria-pressed={negative}
+              className="rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {negative ? "Make it an expense" : "Mark as money back"}
+            </button>
+          </div>
+          <label
             className={cn(
-              "tabular mt-1.5 text-[2.9rem] leading-none font-semibold tracking-tight",
-              cents !== null && cents < 0 && "text-positive",
+              "tabular mt-1.5 flex items-baseline border-b border-input pb-1.5 text-[2.9rem] leading-none font-semibold tracking-tight transition-colors focus-within:border-ring",
+              negative && "text-positive",
             )}
-            aria-live="polite"
           >
-            <span className="mr-0.5 font-medium text-muted-foreground">€</span>
-            {amount || <span className="text-muted-foreground/40">0</span>}
-          </p>
+            <span className="currency">€</span>
+            <input
+              ref={amountRef}
+              value={amount.replace(/^-/, "")}
+              onChange={(e) => {
+                // The sign lives in the toggle above; typing a minus flips it instead of showing it.
+                const raw = e.target.value;
+                const neg = raw.includes("-") ? !negative : negative;
+                setAmount(`${neg ? "-" : ""}${cleanAmount(raw.replace(/-/g, ""))}`);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  nameRef.current?.focus();
+                }
+              }}
+              name="amount"
+              inputMode="decimal"
+              enterKeyHint="next"
+              autoComplete="off"
+              placeholder="0"
+              aria-label={negative ? "Money back in euros" : "Amount in euros"}
+              aria-invalid={amount !== "" && amount !== "-" && cents === null}
+              className="min-w-0 flex-1 bg-transparent caret-primary outline-none placeholder:text-muted-foreground/40"
+            />
+          </label>
           {impact && (
             <p className="tabular mt-2 text-xs text-muted-foreground">
               {impact.cents !== undefined ? (
                 <>
                   {impact.before}
                   <span className={cn("font-medium text-foreground", impact.cents < 0 && "text-signal")}>
-                    {formatEUR(impact.cents)}
+                    <Money value={formatEUR(impact.cents)} />
                   </span>
                   {impact.after}
                 </>
@@ -330,11 +364,17 @@ function ItemForm({
               placeholder="What did you pay for?"
               aria-label="Name"
               autoComplete="off"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && canSave) {
+                  e.preventDefault();
+                  save();
+                }
+              }}
               enterKeyHint="done"
               className="min-w-0 flex-1 bg-transparent text-[17px] font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground"
             />
             {usual && (
-              <span className="tabular shrink-0 text-[13px] text-muted-foreground">usually {formatEUR(usual.amountCents)}</span>
+              <span className="tabular shrink-0 text-[13px] text-muted-foreground">usually <Money value={formatEUR(usual.amountCents)} /></span>
             )}
           </div>
           {nameFocused && suggestions.length > 0 && name.trim() !== "" && (
@@ -354,7 +394,7 @@ function ItemForm({
                         {categories.find((c) => c.id === n.categoryId)?.name}
                       </span>
                     </span>
-                    <span className="tabular font-medium">{formatPlain(n.amountCents)}</span>
+                    <span className={cn("tabular font-medium", n.amountCents < 0 && "text-positive")}>{formatPlain(Math.abs(n.amountCents))}</span>
                   </button>
                 </li>
               ))}
@@ -377,7 +417,7 @@ function ItemForm({
                   className="inline-flex shrink-0 items-baseline gap-1.5 rounded-lg bg-accent px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-secondary"
                 >
                   {n.name}
-                  <span className="tabular font-semibold text-primary">{formatPlain(n.amountCents)}</span>
+                  <span className={cn("tabular font-semibold", n.amountCents < 0 ? "text-positive" : "text-primary")}>{formatPlain(Math.abs(n.amountCents))}</span>
                 </button>
               ))}
             </ChipScroller>
@@ -403,7 +443,15 @@ function ItemForm({
                 <CategoryIcon
                   category={c}
                   className="size-10"
-                  style={on ? { boxShadow: `0 0 0 2px var(--card), 0 0 0 3.5px ${c.color}` } : undefined}
+                  // Chosen: the outline sits on the tile's own edge and the tint deepens, so it reads as one shape.
+                  style={
+                    on
+                      ? {
+                          boxShadow: `inset 0 0 0 1.5px ${c.color}`,
+                          backgroundColor: `color-mix(in oklab, ${c.color} 26%, transparent)`,
+                        }
+                      : undefined
+                  }
                 />
                 <span className="w-full truncate text-center">{c.name}</span>
               </button>
@@ -411,25 +459,7 @@ function ItemForm({
           })}
         </div>
 
-        {/* Plain digits on a hairline grid, like the Income / Saved / Spent row. */}
-        <div className="grid grid-cols-3 border-t border-border">
-          {keys.map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => press(k)}
-              aria-label={k === "back" ? "Delete digit" : k}
-              className="tabular flex h-12 items-center justify-center border-b border-border text-[21px] font-medium outline-none transition-colors not-nth-[3n]:border-r active:bg-inset focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-            >
-              {k === "back" ? <Delete className="size-5" /> : k}
-            </button>
-          ))}
-        </div>
-        <button type="button" onClick={() => press("-")} className="-mt-2 self-center text-xs text-muted-foreground underline-offset-2 hover:underline">
-          {amount.startsWith("-") ? "Make it a payment" : "Money back? Make it negative"}
-        </button>
-
-        <div className="-mt-1 flex flex-col divide-y divide-border border-b border-border text-sm">
+        <div className="flex flex-col divide-y divide-border border-b border-border text-sm">
           <Popover open={dateOpen} onOpenChange={setDateOpen}>
             <PopoverTrigger render={<button type="button" className="flex items-center justify-between py-3 text-left" />}>
               <span>Date</span>
@@ -485,7 +515,15 @@ function ItemForm({
         </div>
 
         <Button onClick={save} disabled={!canSave} className="h-12 rounded-full text-base font-semibold">
-          {editing ? "Save" : cents !== null ? `Add ${formatEUR(cents)}` : "Add"}
+          {editing ? (
+            "Save"
+          ) : cents !== null ? (
+            <>
+              Add <Money value={formatEUR(Math.abs(cents))} />
+            </>
+          ) : (
+            "Add"
+          )}
         </Button>
         {editing && (
           <Button variant={confirmDelete ? "destructive" : "ghost"} onClick={remove} disabled={pending} className="h-11 rounded-full text-signal hover:text-signal">

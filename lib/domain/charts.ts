@@ -12,6 +12,8 @@ export type YearPoint = {
   cumulativeSavingsCents: number;
   /** categoryId (or CREDIT_UNTRACKED) → cents. Sums to spentCents. */
   byCategory: Record<string, number>;
+  /** Like byCategory, but only money going out: money-back items are left out, not netted. */
+  spentByCategory: Record<string, number>;
 };
 
 /**
@@ -24,8 +26,10 @@ export function yearSeries(months: ChainedMonth[]): YearPoint[] {
     .sort((a, b) => a.month - b.month)
     .map((m) => {
       const byCategory: Record<string, number> = {};
+      const spentByCategory: Record<string, number> = {};
       const add = (key: string, cents: number) => {
         if (cents !== 0) byCategory[key] = (byCategory[key] ?? 0) + cents;
+        if (cents > 0) spentByCategory[key] = (spentByCategory[key] ?? 0) + cents;
       };
       for (const it of m.items) {
         if (it.parentItemId) {
@@ -45,6 +49,7 @@ export function yearSeries(months: ChainedMonth[]): YearPoint[] {
         essentialsCents: m.totals.essentialsCents,
         cumulativeSavingsCents: cumulative,
         byCategory,
+        spentByCategory,
       };
     });
 }

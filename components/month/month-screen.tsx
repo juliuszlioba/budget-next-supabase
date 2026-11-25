@@ -7,17 +7,19 @@ import { ChevronDown, ChevronLeft, ChevronRight, Plus, TriangleAlert, Wallet } f
 import type { Bill, Category, Item, Month, NameMemory } from "@/lib/dal/types";
 import { monthTotals } from "@/lib/domain/totals";
 import { yearSeries } from "@/lib/domain/charts";
-import { addMonths, monthName, monthShort, shortDate, ymKey } from "@/lib/domain/dates";
+import { addMonths, monthName, monthShort, shortDate, ymKey, type YM } from "@/lib/domain/dates";
 import { collectionDate } from "@/lib/domain/billing";
-import { formatEUR, formatEURWhole, formatOutflow, formatPlain } from "@/lib/domain/money";
+import { formatEUR, formatEURWhole, formatPlain } from "@/lib/domain/money";
 import { setPaid } from "@/lib/actions/items";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CategoryGlyph, CategoryIcon } from "./category-badge";
 import { ItemSheet, type ItemSheetTarget } from "./item-sheet";
+import { MonthPicker } from "./month-picker";
 import { IncomeSheet } from "./income-sheet";
 import { cn } from "@/lib/utils";
 import { CategorySpend } from "@/components/category-spend";
 import { ADD_ITEM_EVENT } from "@/components/app-nav";
+import { Money } from "@/components/money";
 
 type OptimisticAction =
   | { type: "paid"; id: string; paid: boolean }
@@ -44,9 +46,24 @@ export type MonthScreenProps = {
   names: NameMemory[];
   today: string;
   isCurrent: boolean;
+  current: YM;
+  /** Earliest year with a month, for the month picker. */
+  firstYear: number;
+  /** ymKeys of months that have items. */
+  monthsWithItems: string[];
 };
 
-export function MonthScreen({ month, categories, bills, names, today, isCurrent }: MonthScreenProps) {
+export function MonthScreen({
+  month,
+  categories,
+  bills,
+  names,
+  today,
+  isCurrent,
+  current,
+  firstYear,
+  monthsWithItems,
+}: MonthScreenProps) {
   const [items, applyOptimistic] = useOptimistic(month.items, reduce);
   const [, startTransition] = useTransition();
   const [sheet, setSheet] = useState<ItemSheetTarget | null>(null);
@@ -146,8 +163,13 @@ export function MonthScreen({ month, categories, bills, names, today, isCurrent 
           <ChevronLeft className="size-5" />
         </Link>
         <div className="text-center">
-          <h1 className="text-lg font-semibold tracking-tight text-balance">
-            {monthName(month.month)} {month.year}
+          <h1>
+            <MonthPicker
+              month={{ year: month.year, month: month.month }}
+              current={current}
+              firstYear={firstYear}
+              withItems={new Set(monthsWithItems)}
+            />
           </h1>
           {!isCurrent && (
             <Link href="/" className="text-xs font-medium text-signal">
@@ -197,9 +219,9 @@ export function MonthScreen({ month, categories, bills, names, today, isCurrent 
 
         <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-8">
           <div className="grid grid-cols-3 divide-x divide-border px-1 py-1">
-            <Stat label="Income" value={formatEURWhole(totals.incomeCents + totals.carryCents)} onClick={() => setIncomeOpen(true)} />
-            <Stat label="Saved" value={formatEURWhole(totals.savingsCents)} onClick={() => setIncomeOpen(true)} />
-            <Stat label="Spent" value={formatEURWhole(totals.expenseCents)} />
+            <Stat label="Income" value={<Money value={formatEURWhole(totals.incomeCents + totals.carryCents)} />} onClick={() => setIncomeOpen(true)} />
+            <Stat label="Saved" value={<Money value={formatEURWhole(totals.savingsCents)} />} onClick={() => setIncomeOpen(true)} />
+            <Stat label="Spent" value={<Money value={formatEURWhole(totals.expenseCents)} />} />
           </div>
           <CategorySpend byCategory={byCategory} catById={catById} emptyText="Nothing spent yet this month." />
         </aside>
@@ -242,10 +264,15 @@ function BalanceCard(props: {
         <Wallet className="size-4.5 opacity-80" />
       </div>
       <p className={cn("tabular mt-1 text-[2.6rem] leading-none font-semibold tracking-tight", availableCents < 0 && "text-signal")}>
-        {formatEUR(availableCents)}
+        <Money value={formatEUR(availableCents)} />
       </p>
       <p className="mt-2 text-xs opacity-60">
-        {formatEUR(incomeCents)} income{carryCents ? `, ${formatEUR(carryCents)} carried over` : ""}
+        <Money value={formatEUR(incomeCents)} /> income
+        {carryCents ? (
+          <>
+            , <Money value={formatEUR(carryCents)} /> carried over
+          </>
+        ) : null}
       </p>
 
       <div className="mt-5 grid grid-cols-2">
@@ -253,13 +280,13 @@ function BalanceCard(props: {
           <p className="flex items-center gap-1.5 text-xs opacity-70">
             <i className="size-1.5 rounded-full bg-hero-foreground" /> End forecast
           </p>
-          <p className={cn("tabular mt-1 text-xl font-medium", forecastCents < 0 && "text-signal")}>{formatEUR(forecastCents)}</p>
+          <p className={cn("tabular mt-1 text-xl font-medium", forecastCents < 0 && "text-signal")}><Money value={formatEUR(forecastCents)} /></p>
         </div>
         <div className="border-l border-white/10 pl-4">
           <p className="flex items-center gap-1.5 text-xs opacity-70">
             <i className="size-1.5 rounded-full bg-signal" /> {unpaidCount === 0 ? "All paid" : `${unpaidCount} to pay`}
           </p>
-          <p className="tabular mt-1 text-xl font-medium">{formatEUR(unpaidCents)}</p>
+          <p className="tabular mt-1 text-xl font-medium"><Money value={formatEUR(unpaidCents)} /></p>
         </div>
       </div>
 
@@ -289,7 +316,7 @@ function BalanceCard(props: {
 }
 
 /** One figure in the plain Income / Saved / Spent row (thin dividers, no card). */
-function Stat({ label, value, onClick }: { label: string; value: string; onClick?: () => void }) {
+function Stat({ label, value, onClick }: { label: string; value: React.ReactNode; onClick?: () => void }) {
   const Comp = onClick ? "button" : "div";
   return (
     <Comp
@@ -310,7 +337,7 @@ function ListCard({ title, totalCents, children }: { title: string; totalCents: 
     <section>
       <div className="mb-2 flex items-baseline justify-between px-1">
         <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-        <span className="tabular text-sm text-muted-foreground">{formatEUR(totalCents)}</span>
+        <span className="tabular text-sm text-muted-foreground"><Money value={formatEUR(totalCents)} /></span>
       </div>
       <ul className="rounded-3xl bg-card p-1.5 ring-1 ring-border">{children}</ul>
     </section>
@@ -318,10 +345,12 @@ function ListCard({ title, totalCents, children }: { title: string; totalCents: 
 }
 
 
+/** An item amount without a sign: money going out in the row's colour, money coming back in green. */
 function Amount({ cents, className }: { cents: number; className?: string }) {
   return (
-    <span className={cn("tabular font-semibold", cents < 0 && "text-positive", className)}>
-      {formatOutflow(cents)}
+    <span className={cn("tabular font-semibold", className, cents < 0 && "text-positive")}>
+      <Money value={formatEUR(Math.abs(cents))} />
+      {cents < 0 && <span className="sr-only"> back</span>}
     </span>
   );
 }
@@ -438,7 +467,9 @@ function CreditBillRow({
                 <span className="min-w-0 flex-1 truncate">
                   {p.name} <span className="text-xs text-muted-foreground">· {shortDate(p.date)}</span>
                 </span>
-                <span className="tabular font-medium">{formatPlain(p.amountCents)}</span>
+                <span className={cn("tabular font-medium", p.amountCents < 0 && "text-positive")}>
+                  {formatPlain(Math.abs(p.amountCents))}
+                </span>
               </button>
             </li>
           ))}

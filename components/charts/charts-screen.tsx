@@ -10,6 +10,7 @@ import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/
 import { CategorySpend, UNTRACKED_COLOR } from "@/components/category-spend";
 import { PageHeader } from "@/components/page-header";
 import { cn } from "@/lib/utils";
+import { Money } from "@/components/money";
 
 type Props = {
   year: number;
@@ -49,14 +50,14 @@ function MoneyTooltip({
           <div key={key} className="flex items-center gap-2 py-0.5">
             <i className="size-2.5 shrink-0 rounded-[3px]" style={{ backgroundColor: p.color }} />
             <span className="flex-1 text-muted-foreground">{config[key]?.label ?? key}</span>
-            <span className="tabular font-medium">{formatEUR(Math.round((p.value as number) * 100))}</span>
+            <span className="tabular font-medium"><Money value={formatEUR(Math.round((p.value as number) * 100))} /></span>
           </div>
         );
       })}
       {showTotal && rows.length > 1 && (
         <div className="mt-1 flex justify-between border-t pt-1 font-medium">
           <span>Total</span>
-          <span className="tabular">{formatEUR(Math.round(total * 100))}</span>
+          <span className="tabular"><Money value={formatEUR(Math.round(total * 100))} /></span>
         </div>
       )}
     </div>
@@ -100,7 +101,7 @@ function Section({
 }
 
 /** One figure in a plain row split by thin lines (same as the month screen). */
-function Figure({ label, value }: { label: string; value: string }) {
+function Figure({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="px-4 first:pl-0 last:pr-0">
       <span className="eyebrow block">{label}</span>
@@ -136,15 +137,15 @@ export function ChartsScreen({ year, years, points, summary, categories }: Props
     };
   });
 
-  // Spending per month by category
+  // Spending per month by category: only money going out, so money back never cancels a
+  // category out or pushes a bar below zero.
   const yearByCategory: Record<string, number> = {};
+  const yearSpentByCategory: Record<string, number> = {};
   for (const p of points) {
     for (const [k, c] of Object.entries(p.byCategory)) yearByCategory[k] = (yearByCategory[k] ?? 0) + c;
+    for (const [k, c] of Object.entries(p.spentByCategory)) yearSpentByCategory[k] = (yearSpentByCategory[k] ?? 0) + c;
   }
-  const catKeys = Object.entries(yearByCategory)
-    .filter(([, c]) => c > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([k]) => k);
+  const catKeys = Object.keys(yearSpentByCategory).sort((a, b) => yearSpentByCategory[b] - yearSpentByCategory[a]);
   const catConfig: ChartConfig = Object.fromEntries(
     catKeys.map((k) => [
       k,
@@ -157,7 +158,8 @@ export function ChartsScreen({ year, years, points, summary, categories }: Props
     const p = byMonth.get(m);
     return {
       label: monthShort(m),
-      ...Object.fromEntries(catKeys.map((k) => [k, p ? euros(p.byCategory[k] ?? 0) : 0])),
+      // Empty segments stay out of the stack, so they don't leave a gap of their own.
+      ...Object.fromEntries(catKeys.map((k) => [k, p?.spentByCategory[k] ? euros(p.spentByCategory[k]) : null])),
     };
   });
 
@@ -209,12 +211,16 @@ export function ChartsScreen({ year, years, points, summary, categories }: Props
             <section className="rounded-3xl bg-hero p-5 text-hero-foreground shadow-xl shadow-black/20 ring-1 ring-white/5 lg:p-6">
               <p className="text-sm opacity-80">Saved in {year}</p>
               <p className="tabular mt-1 text-[2.6rem] leading-none font-semibold tracking-tight">
-                {formatEUR(summary.savingsCents)}
+                <Money value={formatEUR(summary.savingsCents)} />
               </p>
               <p className="mt-2 text-xs opacity-60">
-                {summary.savingsRate === null
-                  ? "No income recorded yet"
-                  : `${percent.format(summary.savingsRate)} of your ${formatEURWhole(summary.incomeCents)} income`}
+                {summary.savingsRate === null ? (
+                  "No income recorded yet"
+                ) : (
+                  <>
+                    {percent.format(summary.savingsRate)} of your <Money value={formatEURWhole(summary.incomeCents)} /> income
+                  </>
+                )}
               </p>
 
               <ChartContainer config={savingsConfig} className="mt-4 aspect-auto h-32 w-full">
@@ -236,28 +242,38 @@ export function ChartsScreen({ year, years, points, summary, categories }: Props
                   <p className="flex items-center gap-1.5 text-xs opacity-70">
                     <i className="size-1.5 rounded-full bg-hero-foreground" /> Average a month
                   </p>
-                  <p className="tabular mt-1 text-xl font-medium">{formatEURWhole(avgSaved)}</p>
+                  <p className="tabular mt-1 text-xl font-medium"><Money value={formatEURWhole(avgSaved)} /></p>
                 </div>
                 <div className="border-l border-white/10 pl-4">
                   <p className="flex items-center gap-1.5 text-xs opacity-70">
                     <i className="size-1.5 rounded-full bg-primary" /> Best month{best ? `, ${monthName(best.month)}` : ""}
                   </p>
-                  <p className="tabular mt-1 text-xl font-medium">{best ? formatEURWhole(best.savingsCents) : "–"}</p>
+                  <p className="tabular mt-1 text-xl font-medium">{best ? <Money value={formatEURWhole(best.savingsCents)} /> : "–"}</p>
                 </div>
               </div>
             </section>
             <Section
               title="Spending by month"
-              aside={<span className="text-right text-xs text-muted-foreground">Card purchases count when their bill is paid</span>}
+              aside={<span className="text-right text-xs text-muted-foreground">Money back not included. Card purchases count when their bill is paid.</span>}
             >
-              <ChartContainer config={catConfig} className="aspect-auto h-72 w-full">
-                <BarChart data={catData} margin={{ left: -12, right: 4 }} stackOffset="sign">
+              <ChartContainer config={catConfig} className="aspect-auto h-[26rem] w-full lg:h-[30rem]">
+                <BarChart data={catData} margin={{ left: -12, right: 4 }} barCategoryGap="28%" maxBarSize={24}>
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="label" {...axis} interval={0} />
                   <YAxis {...axis} tickFormatter={formatCompact} width={44} />
                   <ChartTooltip cursor={{ fillOpacity: 0.3 }} content={<MoneyTooltip config={catConfig} showTotal />} />
                   {catKeys.map((k) => (
-                    <Bar key={k} dataKey={k} stackId="spend" fill={catConfig[k].color} />
+                    // Each category is its own rounded block, split from the next by a page-coloured seam,
+                    // like the segments of the "Spending in" strip.
+                    <Bar
+                      key={k}
+                      dataKey={k}
+                      stackId="spend"
+                      fill={catConfig[k].color}
+                      radius={4}
+                      stroke="var(--background)"
+                      strokeWidth={2}
+                    />
                   ))}
                 </BarChart>
               </ChartContainer>
@@ -266,9 +282,9 @@ export function ChartsScreen({ year, years, points, summary, categories }: Props
 
           <aside className="flex min-w-0 flex-col gap-8 lg:sticky lg:top-8">
             <div className="grid grid-cols-3 divide-x divide-border px-1 py-1">
-              <Figure label="Income" value={formatEURWhole(summary.incomeCents)} />
-              <Figure label="Spent" value={formatEURWhole(summary.spentCents)} />
-              <Figure label="Essentials" value={formatEURWhole(summary.essentialsCents)} />
+              <Figure label="Income" value={<Money value={formatEURWhole(summary.incomeCents)} />} />
+              <Figure label="Spent" value={<Money value={formatEURWhole(summary.spentCents)} />} />
+              <Figure label="Essentials" value={<Money value={formatEURWhole(summary.essentialsCents)} />} />
             </div>
             <CategorySpend byCategory={yearByCategory} catById={catById} title={`Spending in ${year}`} />
           </aside>

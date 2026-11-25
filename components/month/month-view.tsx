@@ -14,7 +14,7 @@ export async function MonthView({ ym }: { ym: string | null }) {
   if (!target) notFound();
 
   await ensureMonth(target);
-  const [{ categories, bills, byKey }, names] = await Promise.all([getBudget(), getNameMemory()]);
+  const [{ categories, bills, byKey, months }, names] = await Promise.all([getBudget(), getNameMemory()]);
   const month = byKey.get(ymKey(target));
   if (!month) notFound();
 
@@ -26,6 +26,9 @@ export async function MonthView({ ym }: { ym: string | null }) {
       names={names}
       today={today}
       isCurrent={ymKey(target) === ymKey(current)}
+      current={current}
+      firstYear={months.reduce((y, m) => Math.min(y, m.year), current.year)}
+      monthsWithItems={months.filter((m) => m.items.length > 0).map((m) => m.key)}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCompact, formatEUR, formatOutflow, parseAmount, toCents } from "./money";
+import { formatCompact, formatEUR, parseAmount, toCents } from "./money";
 
 describe("parseAmount", () => {
   it("accepts comma and dot decimals", () => {
@@ -22,12 +22,7 @@ describe("parseAmount", () => {
   });
 });
 
-describe("formatOutflow / formatCompact", () => {
-  it("signs outgoing and incoming money", () => {
-    expect(formatOutflow(899)).toBe("-€8.99");
-    expect(formatOutflow(-2000)).toBe("+€20.00");
-    expect(formatOutflow(0)).toBe("€0.00");
-  });
+describe("formatCompact", () => {
   it("compacts axis numbers", () => {
     expect(formatCompact(1200)).toBe("1.2K");
     expect(formatCompact(450)).toBe("450");

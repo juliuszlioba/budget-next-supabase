@@ -4,6 +4,7 @@ import { useId } from "react";
 import type { Category } from "@/lib/dal/types";
 import { CREDIT_UNTRACKED } from "@/lib/domain/charts";
 import { formatEUR } from "@/lib/domain/money";
+import { Money } from "@/components/money";
 
 export const UNTRACKED_COLOR = "#5f5d59";
 
@@ -44,7 +45,7 @@ export function CategorySpend({
         <h2 id={headingId} className="text-lg font-semibold tracking-tight">
           {title}
         </h2>
-        {total > 0 && <span className="tabular text-sm text-muted-foreground">{formatEUR(total)}</span>}
+        {total > 0 && <span className="tabular text-sm text-muted-foreground"><Money value={formatEUR(total)} /></span>}
       </div>
       {rows.length === 0 ? (
         <p className="px-1 text-sm text-muted-foreground">{emptyText}</p>
@@ -65,7 +66,7 @@ export function CategorySpend({
                 <span className="size-2.5 rounded-[3px]" style={{ backgroundColor: r.color }} aria-hidden />
                 <span className="truncate">{r.label}</span>
                 <span className="tabular text-xs text-muted-foreground">{pct.format(r.cents / total)}</span>
-                <span className="tabular text-right font-semibold">{formatEUR(r.cents)}</span>
+                <span className="tabular text-right font-semibold"><Money value={formatEUR(r.cents)} /></span>
               </li>
             ))}
           </ul>

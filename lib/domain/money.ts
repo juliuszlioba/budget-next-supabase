@@ -36,13 +36,7 @@ export function formatEUR(cents: number): string {
   return eur.format(cents / 100);
 }
 
-const eurSigned = new Intl.NumberFormat("en-US", { style: "currency", currency: "EUR", signDisplay: "exceptZero" });
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
-
-/** An item amount as money leaving (-€8.99) or coming back (+€20.00). */
-export function formatOutflow(cents: number): string {
-  return eurSigned.format(-cents / 100);
-}
 
 /** 1.2K style numbers for chart axes. */
 export function formatCompact(value: number): string {

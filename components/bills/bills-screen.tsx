@@ -15,6 +15,7 @@ import { CategoryGlyph, CategoryIcon } from "@/components/month/category-badge";
 import { PageHeader } from "@/components/page-header";
 import { useIsDesktop } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
+import { Money } from "@/components/money";
 
 type Editing = { bill: Bill | null } | null;
 
@@ -76,7 +77,11 @@ export function BillsScreen({ bills, categories }: { bills: Bill[]; categories: 
 
   return (
     <div className="mx-auto w-full max-w-xl px-4 pt-4 lg:max-w-2xl lg:pt-8">
-      <PageHeader title="Regular bills" subtitle={`${formatEUR(monthlyCents)} a month, added to each new month as unpaid`} />
+      <PageHeader title="Regular bills" subtitle={
+          <>
+            <Money value={formatEUR(monthlyCents)} /> a month, added to each new month as unpaid
+          </>
+        } />
       <ul className="mb-4 overflow-hidden rounded-3xl bg-card p-1.5 ring-1 ring-border">{active.map(row)}</ul>
       <Button variant="outline" className="mb-6 h-11 w-full rounded-full" onClick={() => setEditing({ bill: null })}>
         <Plus className="size-4" /> Add a regular bill

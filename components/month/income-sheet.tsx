@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useIsDesktop } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
+import { Money } from "@/components/money";
 
 type Line = { key: number; label: string; amount: string; isRecurring: boolean };
 
@@ -80,7 +81,7 @@ function IncomeForm({ month, carryCents, onDone }: { month: Month; carryCents: n
           {monthName(month.month)} {month.year}: income &amp; savings
         </SheetTitle>
         <SheetDescription>
-          Carried over from last month: <span className="tabular font-medium text-foreground">{formatEUR(carryCents)}</span>
+          Carried over from last month: <span className="tabular font-medium text-foreground"><Money value={formatEUR(carryCents)} /></span>
         </SheetDescription>
       </SheetHeader>
       <div className="flex flex-col gap-4 px-4 pb-4">

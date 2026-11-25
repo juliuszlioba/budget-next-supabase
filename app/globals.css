@@ -145,7 +145,7 @@
   body {
     @apply bg-background text-foreground;
     -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation; /* no double-tap zoom delay (number pad, chips) */
+    touch-action: manipulation; /* no double-tap zoom delay (chips, toggles) */
   }
   html {
     @apply font-sans;
@@ -170,6 +170,11 @@
 }
 
 .tabular { font-variant-numeric: tabular-nums; }
+
+/* The € next to an amount: same size as the digits, faded in the figure's own colour. */
+.currency {
+  opacity: 0.55;
+}
 
 /* Small muted label for a field or group (sentence case). */
 .eyebrow {

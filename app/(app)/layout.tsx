@@ -20,7 +20,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           <SideNav />
         </Suspense>
       </aside>
-      <main id="main" tabIndex={-1} className="min-w-0 flex-1 outline-none pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-10">{children}</main>
+      <main id="main" tabIndex={-1} className="min-w-0 flex-1 outline-none pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-10">{children}</main>
       <Suspense fallback={<BottomTabsView />}>
         <BottomTabs />
       </Suspense>

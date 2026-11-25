@@ -33,55 +33,66 @@ export function BottomTabs() {
   );
 }
 
-function Tab({ tab, active }: { tab: (typeof TABS)[number]; active: boolean }) {
-  const Icon = tab.icon;
-  return (
-    <Link
-      href={tab.href}
-      aria-label={tab.label}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "flex size-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground",
-        active && "text-primary hover:text-primary",
-      )}
-    >
-      <Icon className="size-5.5" strokeWidth={active ? 2.2 : 1.7} />
+type TabDef = (typeof TABS)[number];
+type IsActive = (m: (p: string) => boolean) => boolean;
+
+/** The add action: a button on the client, a plain link before hydration. */
+function AddControl({ onAdd, className, children }: { onAdd?: () => void; className: string; children: React.ReactNode }) {
+  return onAdd ? (
+    <button type="button" onClick={onAdd} aria-label="Add item" className={className}>
+      {children}
+    </button>
+  ) : (
+    <Link href="/?add=1" aria-label="Add item" className={className}>
+      {children}
     </Link>
   );
 }
 
-export function BottomTabsView({
-  isActive = () => false,
-  onAdd,
-}: {
-  isActive?: (m: (p: string) => boolean) => boolean;
-  onAdd?: () => void;
-}) {
-  const [left, right] = [TABS.slice(0, 2), TABS.slice(2)];
-  const addClass =
-    "flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-transform active:scale-95";
+function TabLink({ tab, active, className, children }: { tab: TabDef; active: boolean; className: string; children: React.ReactNode }) {
   return (
-    <nav
-      aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:hidden"
-    >
-      <div className="mx-auto flex h-16 max-w-sm items-center justify-between rounded-full bg-card/90 px-3 shadow-2xl shadow-black/50 ring-1 ring-border backdrop-blur-md">
-        {left.map((t) => (
-          <Tab key={t.href} tab={t} active={isActive(t.match)} />
-        ))}
-        {onAdd ? (
-          <button type="button" onClick={onAdd} aria-label="Add item" className={addClass}>
-            <Plus className="size-6" strokeWidth={2.4} />
-          </button>
-        ) : (
-          <Link href="/?add=1" aria-label="Add item" className={addClass}>
-            <Plus className="size-6" strokeWidth={2.4} />
-          </Link>
-        )}
-        {right.map((t) => (
-          <Tab key={t.href} tab={t} active={isActive(t.match)} />
-        ))}
+    <Link href={tab.href} aria-label={tab.label} aria-current={active ? "page" : undefined} className={className}>
+      {children}
+    </Link>
+  );
+}
+
+const focusRing = "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
+/** Compact tabs where only the active one shows its name; add is a wide key running into the corner. */
+export function BottomTabsView({ isActive = () => false, onAdd }: { isActive?: IsActive; onAdd?: () => void }) {
+  return (
+    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-border bg-card lg:hidden">
+      <div className="flex h-16 flex-1 items-center justify-around gap-1 px-2 mb-[env(safe-area-inset-bottom)]">
+        {TABS.map((t) => {
+          const active = isActive(t.match);
+          const Icon = t.icon;
+          return (
+            <TabLink
+              key={t.href}
+              tab={t}
+              active={active}
+              className={cn(
+                "flex h-10 items-center justify-center gap-2 rounded-full text-sm font-medium text-muted-foreground transition-[background-color,color,padding] hover:text-foreground motion-reduce:transition-none",
+                focusRing,
+                active ? "bg-secondary px-3.5 text-foreground" : "w-11",
+              )}
+            >
+              <Icon className={cn("size-5.5 shrink-0", active && "text-primary")} strokeWidth={active ? 2.1 : 1.7} />
+              {active && t.label}
+            </TabLink>
+          );
+        })}
       </div>
+      <AddControl
+        onAdd={onAdd}
+        className="shrink-0 bg-primary px-6 pb-[env(safe-area-inset-bottom)] text-[15px] font-semibold text-primary-foreground outline-none active:brightness-95 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-foreground"
+      >
+        <span className="flex h-16 items-center gap-1.5">
+          <Plus className="size-5" strokeWidth={2.4} />
+          Add
+        </span>
+      </AddControl>
     </nav>
   );
 }
@@ -91,7 +102,7 @@ export function SideNav() {
   return <SideNavView isActive={isActive} />;
 }
 
-export function SideNavView({ isActive = () => false }: { isActive?: (m: (p: string) => boolean) => boolean }) {
+export function SideNavView({ isActive = () => false }: { isActive?: IsActive }) {
   return (
     <nav className="flex flex-col gap-1">
       {TABS.map(({ href, label, icon: Icon, match }) => {

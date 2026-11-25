@@ -53,6 +53,15 @@ describe("yearSeries", () => {
     });
   });
 
+  it("leaves money back out of spending by category", () => {
+    expect(series[0].spentByCategory).toEqual({
+      housing: 80000,
+      food: 40000,
+      shopping: 9460,
+      [CREDIT_UNTRACKED]: 47525 - 9460,
+    });
+  });
+
   it("each month's categories add up to its spent total", () => {
     for (const p of series) {
       const total = Object.values(p.byCategory).reduce((a, b) => a + b, 0);
