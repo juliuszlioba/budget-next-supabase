@@ -6,7 +6,7 @@ import { History } from "lucide-react";
 import type { Category, Item, Month, NameMemory } from "@/lib/dal/types";
 import { createItem, deleteItem, updateItem, type ItemInput } from "@/lib/actions/items";
 import { creditBillMonthFor } from "@/lib/domain/billing";
-import { addMonths, monthName, shortDate, ymKey, ymOfDate, isoDate, type YM } from "@/lib/domain/dates";
+import { addMonths, daysInMonth, monthName, shortDate, ymKey, ymOfDate, isoDate, type YM } from "@/lib/domain/dates";
 import { formatEUR, formatPlain, parseAmount } from "@/lib/domain/money";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -113,6 +113,10 @@ function ItemForm({
   const editing = target.mode === "edit" ? target.item : null;
   const isBillItem = !!editing && (!!editing.billId || editing.isCreditBill || (target.mode === "edit" && target.hasChildren));
   const wasCardPurchase = !!editing?.parentItemId;
+  // A card bill stays in its month (its purchases live there, and a month has one card bill).
+  const monthLocked = !!editing && (editing.isCreditBill || (target.mode === "edit" && target.hasChildren));
+  const monthStart = toDate(isoDate(month.year, month.month, 1));
+  const monthEnd = toDate(isoDate(month.year, month.month, daysInMonth(month.year, month.month)));
 
   const [initial] = useState(() => ({
     amount: editing ? formatPlain(editing.amountCents).replace(/,/g, "") : "",
@@ -474,6 +478,11 @@ function ItemForm({
                 selected={toDate(date)}
                 defaultMonth={toDate(date)}
                 weekStartsOn={1}
+                {...(monthLocked && {
+                  startMonth: monthStart,
+                  endMonth: monthStart,
+                  disabled: [{ before: monthStart }, { after: monthEnd }],
+                })}
                 onSelect={(d) => {
                   if (d) {
                     setDate(fromDate(d));

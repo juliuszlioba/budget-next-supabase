@@ -5,7 +5,7 @@ import { requireUser, type Db } from "@/lib/dal/auth";
 import { fail, run, type ActionResult } from "./run";
 import { ensureMonth } from "@/lib/dal/budget";
 import { creditBillMonthFor } from "@/lib/domain/billing";
-import { isIsoDate, isoDate, ymOfDate, type YM } from "@/lib/domain/dates";
+import { isIsoDate, isoDate, ymKey, ymOfDate, type YM } from "@/lib/domain/dates";
 import { fromCents } from "@/lib/domain/money";
 
 
@@ -120,13 +120,27 @@ export async function updateItem(itemId: string, input: ItemInput): Promise<Acti
     const { supabase } = await requireUser();
     const { data: current, error } = await supabase
       .from("items")
-      .select("id, amount, bill_id, parent_item_id, is_estimate")
+      .select("id, amount, bill_id, parent_item_id, is_estimate, months!inner(year, month)")
       .eq("id", id.data)
       .single();
     if (error) throw error;
-    const hasChildren =
-      (await supabase.from("items").select("id", { count: "exact", head: true }).eq("parent_item_id", id.data))
-        .count ?? 0;
+    const children = await supabase
+      .from("items")
+      .select("id", { count: "exact", head: true })
+      .eq("parent_item_id", id.data);
+    if (children.error) throw children.error;
+    const hasChildren = children.count ?? 0;
+
+    // A card bill stays in its month: its purchases are stored in that month, and a month has one card bill.
+    let isCardBill = hasChildren > 0;
+    if (!isCardBill && current.bill_id && !current.parent_item_id) {
+      const bill = await supabase.from("bills").select("is_credit_card").eq("id", current.bill_id).maybeSingle();
+      if (bill.error) throw bill.error;
+      isCardBill = !!bill.data?.is_credit_card;
+    }
+    if (isCardBill && ymKey(ymOfDate(v.date)) !== ymKey(current.months)) {
+      throw new Error("A card bill can't move to another month. Pick a date in its own month.");
+    }
 
     const base = {
       name: v.name,
