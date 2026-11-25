@@ -135,7 +135,12 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            [_ in never]: never
+            "is_demo":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"seed_demo_data":
+{ Args: { "uid": string }; Returns: undefined
+                           }
           }
           Enums: {
             [_ in never]: never

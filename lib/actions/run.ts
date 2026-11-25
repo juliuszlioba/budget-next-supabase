@@ -2,13 +2,20 @@ import "server-only";
 
 import { refresh } from "next/cache";
 import { unstable_rethrow } from "next/navigation";
+import { requireUser } from "@/lib/dal/auth";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export const fail = (error: string): ActionResult => ({ ok: false, error });
 
-/** Runs a mutation, turns errors into a message for the UI, and refreshes the page data on success. */
+export const DEMO_READ_ONLY = "This is a read-only demo, so changes aren’t saved.";
+
+/**
+ * Runs a mutation, turns errors into a message for the UI, and refreshes the page data on success.
+ * The demo account is read-only (the database enforces it too), so it never gets this far.
+ */
 export async function run(fn: () => Promise<void>): Promise<ActionResult> {
+  if ((await requireUser()).isDemo) return fail(DEMO_READ_ONLY);
   try {
     await fn();
   } catch (e) {

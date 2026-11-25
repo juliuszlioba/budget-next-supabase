@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Eye, EyeOff, Loader2, Lock, Mail, TriangleAlert } from "lucide-react";
-import { login, type LoginState } from "./actions";
+import { Eye, EyeOff, Loader2, Lock, Mail, Sparkles, TriangleAlert } from "lucide-react";
+import { login, loginDemo, type LoginState } from "./actions";
 import { cn } from "@/lib/utils";
 
 const initial: LoginState = { error: null, email: "" };
@@ -10,12 +10,13 @@ const initial: LoginState = { error: null, email: "" };
 const field =
   "h-12 w-full rounded-xl bg-inset pl-11 text-base text-foreground ring-1 ring-border outline-none transition-shadow placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring aria-invalid:ring-signal";
 
-export function LoginForm() {
+export function LoginForm({ demo }: { demo: boolean }) {
   const [state, action, pending] = useActionState(login, initial);
   const [showPassword, setShowPassword] = useState(false);
   const invalid = Boolean(state.error);
 
   return (
+    <>
     <form action={action} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <label htmlFor="email" className="eyebrow">
@@ -90,6 +91,35 @@ export function LoginForm() {
           </>
         )}
       </button>
+    </form>
+    {demo && <DemoLogin />}
+    </>
+  );
+}
+
+/** Opens the shared, read-only demo account. */
+function DemoLogin() {
+  const [error, action, pending] = useActionState(loginDemo, null);
+  return (
+    <form action={action} className="mt-6 flex flex-col gap-3 border-t border-border pt-6">
+      <button
+        type="submit"
+        disabled={pending}
+        className="flex h-12 items-center justify-center gap-2 rounded-full text-base font-semibold text-foreground ring-1 ring-border transition-[background-color,transform] hover:bg-accent active:scale-[0.98] disabled:opacity-70"
+      >
+        {pending ? (
+          <>
+            <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> Opening the demo…
+          </>
+        ) : (
+          <>
+            <Sparkles className="size-4 text-primary" /> Try the demo
+          </>
+        )}
+      </button>
+      <p aria-live="polite" className="text-center text-xs text-muted-foreground">
+        {error ? <span className="text-signal">{error}</span> : "Look around two years of made-up data. Nothing is saved."}
+      </p>
     </form>
   );
 }

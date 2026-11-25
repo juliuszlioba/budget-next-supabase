@@ -6,7 +6,7 @@ Built with **Next.js 16**, **Supabase** (Postgres + Auth), **Tailwind CSS 4**, *
 
 ![Month view on desktop](docs/screenshots/desktop-month.png)
 
-<sub>All screenshots use made-up demo data (see [Demo data](#demo-data)).</sub>
+<sub>All screenshots use made-up demo data (see [Demo account](#demo-account)).</sub>
 
 ## Features
 
@@ -100,15 +100,24 @@ pnpm dev:lan    # also reachable from a phone on the same network
 
 The seed creates one user, `test@email.com` / `123456`, along with default categories and regular bills. Sign-ups are disabled.
 
-### Demo data
+### Demo account
 
-To try the app with a year of made-up data, load the demo account. You can run it again at any time to reset the account, and other users' data isn't touched:
+`supabase db reset` also creates a demo account with about two years of made-up data, dated up to the current month. To get the **Try the demo** button on the login page, add its login to `.env.local`:
 
-```bash
-docker exec -i supabase_db_budget-next-supabase psql -U postgres -d postgres < scripts/demo-data.sql
+```env
+DEMO_EMAIL=demo@example.com
+DEMO_PASSWORD=demo-password
 ```
 
-Then log in as `demo@example.com` / `demo-password`.
+The demo is read-only: visitors can look around and open every sheet, but saving shows "This is a read-only demo" and nothing is stored. Row-level security enforces this for the account marked with `app_metadata.demo`, so it holds even outside the app. A banner across the top of the app says it's the demo. Months outside the demo data open the nearest month that has data instead of creating a new one.
+
+The data is dated up to the month it was generated in. To add the demo account, or refresh its data, on a database without resetting it (for example a hosted project, through the SQL editor):
+
+```bash
+docker exec -i supabase_db_budget-next-supabase psql -U postgres -d postgres < supabase/demo.sql
+```
+
+Leave the two variables unset to hide the button.
 
 ## Scripts
 
@@ -128,8 +137,8 @@ components/       UI by feature, plus shadcn primitives in ui/
 lib/domain/       Pure money logic: totals, carry-over, billing cycle (unit-tested)
 lib/dal/          Server-only data access; every read checks the session
 lib/actions/      Server Actions for all changes
-supabase/         Migrations, seed and local config
-scripts/          Spreadsheet import and demo data
+supabase/         Migrations, seed, demo account and local config
+scripts/          Spreadsheet import
 docs/             Import guide and screenshots
 ```
 
@@ -147,3 +156,4 @@ The app currently runs locally only. To put it online:
 1. Create a Supabase project and push the migrations (`supabase db push`).
 2. Disable sign-ups and create your user with a **strong password**.
 3. Deploy to Vercel, setting `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+4. Optionally run `supabase/demo.sql` (with a different password) and set `DEMO_EMAIL` and `DEMO_PASSWORD` to offer the demo.

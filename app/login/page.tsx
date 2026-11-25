@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppLogo } from "@/components/app-logo";
+import { demoCredentials } from "@/lib/demo";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Log in · Budget" };
@@ -16,7 +17,7 @@ export default function LoginPage() {
         <section className="rounded-3xl bg-card p-6 shadow-2xl shadow-black/40 ring-1 ring-border">
           <h1 className="text-2xl font-semibold tracking-tight text-balance">Log in to your budget</h1>
           <p className="mt-1 mb-6 text-sm text-muted-foreground">Private access. Your data stays yours.</p>
-          <LoginForm />
+          <LoginForm demo={demoCredentials() !== null} />
         </section>
       </div>
     </main>

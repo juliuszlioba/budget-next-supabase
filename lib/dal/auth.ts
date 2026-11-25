@@ -17,7 +17,8 @@ export const requireUser = cache(async () => {
   const { data } = await supabase.auth.getClaims();
   const id = data?.claims?.sub;
   if (!id) redirect("/login");
-  return { id, email: (data.claims.email as string | undefined) ?? "", supabase };
+  const isDemo = (data.claims.app_metadata as { demo?: unknown } | undefined)?.demo === true;
+  return { id, email: (data.claims.email as string | undefined) ?? "", isDemo, supabase };
 });
 
 export type Db = Awaited<ReturnType<typeof requireUser>>["supabase"];

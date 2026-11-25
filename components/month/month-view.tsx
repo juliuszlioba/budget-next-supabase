@@ -1,22 +1,29 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal/auth";
 import { ensureMonth, getBudget, getNameMemory } from "@/lib/dal/budget";
-import { parseYm, todayIso, ymKey, ymOfDate } from "@/lib/domain/dates";
+import { compareYm, parseYm, todayIso, ymKey, ymOfDate } from "@/lib/domain/dates";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MonthScreen } from "./month-screen";
 
-/** Loads (creating if needed) a month and renders it. `ym` is "YYYY-MM", or null for the current month. */
+/**
+ * Loads (creating if needed) a month and renders it. `ym` is "YYYY-MM", or null for the current month.
+ * The read-only demo never creates months: outside its data it goes to the nearest month it has.
+ */
 export async function MonthView({ ym }: { ym: string | null }) {
-  await requireUser();
+  const { isDemo } = await requireUser();
   const today = todayIso();
   const current = ymOfDate(today);
   const target = ym === null ? current : parseYm(ym);
   if (!target) notFound();
 
-  await ensureMonth(target);
+  if (!isDemo) await ensureMonth(target);
   const [{ categories, bills, byKey, months }, names] = await Promise.all([getBudget(), getNameMemory()]);
   const month = byKey.get(ymKey(target));
-  if (!month) notFound();
+  if (!month) {
+    const nearest = isDemo && months.length ? (compareYm(target, months[0]) < 0 ? months[0] : months.at(-1)!) : null;
+    if (nearest) redirect(`/month/${nearest.key}`);
+    notFound();
+  }
 
   return (
     <MonthScreen

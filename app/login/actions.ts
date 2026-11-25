@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { demoCredentials } from "@/lib/demo";
 
 const schema = z.object({
   email: z.email(),
@@ -19,6 +20,18 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) return { error: "Wrong email or password. Check both and try again.", email };
+
+  redirect("/");
+}
+
+/** Logs in to the shared, read-only demo account. */
+export async function loginDemo(): Promise<string | null> {
+  const credentials = demoCredentials();
+  if (!credentials) return "The demo isn’t available right now.";
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword(credentials);
+  if (error) return "Couldn’t open the demo. Try again in a moment.";
 
   redirect("/");
 }
