@@ -128,6 +128,15 @@ export function MonthScreen({
   const prev = addMonths(month, -1);
   const next = addMonths(month, 1);
   const paidCents = totals.expenseCents - totals.unpaidCents;
+  // List headers show only money going out; money back is left out of them.
+  const outgoingCents = (list: Item[]) =>
+    list.reduce((acc, it) => acc + Math.max(totals.effective[it.id] ?? 0, 0), 0);
+  // Unpaid money back is waiting to come in, so it gets its own list instead of "To pay".
+  const toReceive = unpaid.filter((it) => (totals.effective[it.id] ?? 0) < 0);
+  const toPay = unpaid.filter((it) => (totals.effective[it.id] ?? 0) >= 0);
+  const toReceiveCents = toReceive.reduce((acc, it) => acc - (totals.effective[it.id] ?? 0), 0);
+  // Money back that has arrived, shown together with income under "Available now".
+  const moneyBackCents = paid.reduce((acc, it) => acc - Math.min(totals.effective[it.id] ?? 0, 0), 0);
 
   const renderRow = (it: Item) =>
     it.isCreditBill ? (
@@ -191,11 +200,11 @@ export function MonthScreen({
           <BalanceCard
             availableCents={totals.availableNowCents}
             forecastCents={totals.endForecastCents}
-            unpaidCount={totals.unpaidCount}
-            unpaidCents={totals.unpaidCents}
+            unpaidCount={toPay.length}
+            unpaidCents={outgoingCents(toPay)}
             paidCents={paidCents}
             carryCents={totals.carryCents}
-            incomeCents={totals.incomeCents}
+            incomeCents={totals.incomeCents + moneyBackCents}
             onAdd={() => setSheet({ mode: "add" })}
             onIncome={() => setIncomeOpen(true)}
           />
@@ -205,13 +214,18 @@ export function MonthScreen({
               Nothing here yet. Tap <span className="font-semibold text-foreground">Add item</span> to log what you paid.
             </p>
           )}
-          {unpaid.length > 0 && (
-            <ListCard title="To pay" totalCents={totals.unpaidCents}>
-              {unpaid.map(renderRow)}
+          {toPay.length > 0 && (
+            <ListCard title="To pay" totalCents={outgoingCents(toPay)}>
+              {toPay.map(renderRow)}
+            </ListCard>
+          )}
+          {toReceive.length > 0 && (
+            <ListCard title="To receive" totalCents={toReceiveCents}>
+              {toReceive.map(renderRow)}
             </ListCard>
           )}
           {paid.length > 0 && (
-            <ListCard title="Paid" totalCents={paidCents}>
+            <ListCard title="Paid" totalCents={outgoingCents(paid)}>
               {paid.map(renderRow)}
             </ListCard>
           )}

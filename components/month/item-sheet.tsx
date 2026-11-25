@@ -502,7 +502,7 @@ function ItemForm({
           )}
           {!onCard && (
             <label className="flex items-center justify-between py-2.5">
-              <span>Paid already</span>
+              <span>{negative ? "Already received" : "Paid already"}</span>
               <Switch
                 checked={effectivePaid}
                 onCheckedChange={(v) => {
