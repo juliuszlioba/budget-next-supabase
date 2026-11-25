@@ -6,8 +6,12 @@ import { ChartsScreen } from "@/components/charts/charts-screen";
 import { Skeleton } from "@/components/ui/skeleton";
 
 async function Charts({ searchParams }: { searchParams: PageProps<"/charts">["searchParams"] }) {
-  const { categories, months } = await getBudget();
-  const thisYear = Number(todayIso().slice(0, 4));
+  const { categories, months: allMonths } = await getBudget();
+  const today = todayIso();
+  const thisYear = Number(today.slice(0, 4));
+  const thisMonth = Number(today.slice(5, 7));
+  // Future months are only plans, so charts show what has happened up to this month.
+  const months = allMonths.filter((m) => m.year < thisYear || (m.year === thisYear && m.month <= thisMonth));
   const years = [...new Set([...months.map((m) => m.year), thisYear])].sort();
   const requested = Number((await searchParams).year);
   const year = years.includes(requested) ? requested : thisYear;
