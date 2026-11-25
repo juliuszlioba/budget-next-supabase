@@ -518,9 +518,10 @@ function ItemForm({
           {editing ? (
             "Save"
           ) : cents !== null ? (
-            <>
+            // One span, so the button's gap doesn't split the € from its digits.
+            <span>
               Add <Money value={formatEUR(Math.abs(cents))} />
-            </>
+            </span>
           ) : (
             "Add"
           )}

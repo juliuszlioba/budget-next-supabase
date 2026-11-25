@@ -6,16 +6,6 @@ Built with **Next.js 16**, **Supabase** (Postgres + Auth), **Tailwind CSS 4**, *
 
 ![Month view on desktop](docs/screenshots/desktop-month.png)
 
-<table>
-  <tr>
-    <td><img src="docs/screenshots/mobile-month.png" alt="Month view on a phone" width="260"></td>
-    <td><img src="docs/screenshots/mobile-add.png" alt="Adding an item on a phone" width="260"></td>
-    <td><img src="docs/screenshots/mobile-charts.png" alt="Charts on a phone" width="260"></td>
-  </tr>
-</table>
-
-![Charts on desktop](docs/screenshots/desktop-charts.png)
-
 <sub>All screenshots use made-up demo data (see [Demo data](#demo-data)).</sub>
 
 ## Features
@@ -27,11 +17,17 @@ Each month opens with two numbers:
 - **Available now:** what's actually in the account today, meaning income plus last month's carry-over, minus savings and everything already paid.
 - **End forecast:** what will be left once every unpaid item is paid as well.
 
-Below them are the items still **to pay** and the ones already **paid**. Tick an item off as it leaves your account. Beside the list (or below it on a phone) are the month's income, savings and spending, plus a breakdown of spending by category. Whatever is left at the end of a month carries over into the next one automatically.
+Below them are the items still **to pay**, marked with an orange ring, and the ones already **paid**, marked with a quiet tick. Tap the ring when the money leaves your account. Beside the list (or below it on a phone) are the month's income, savings and spending, plus a breakdown of spending by category. Whatever is left at the end of a month carries over into the next one automatically.
+
+Tap the month name at the top to jump to any other month. Months that have items are marked with a dot.
+
+<img src="docs/screenshots/mobile-month.png" alt="Month view on a phone" width="260">
 
 ### Quick add
 
-The **+** button opens a sheet built for adding a payment in a few taps. Type the amount on the number pad, pick a category, and you're done. Recent names show up as chips that fill in the amount and category for you. You can pick any date, mark the payment as not paid yet, or enter a negative amount for a refund.
+The **Add** button opens a sheet built for adding a payment in a few taps. Type the amount (the phone shows its number keyboard), name it, pick a category, and you're done. Recent names show up as chips that fill in the amount and category for you. You can pick any date or mark the payment as not paid yet. For a refund, tap **Mark as money back**: it's shown in green instead of with a minus sign.
+
+<img src="docs/screenshots/mobile-add.png" alt="Adding an item on a phone" width="260">
 
 ### Credit card
 
@@ -52,15 +48,22 @@ Per year you get:
 - income, savings and spending for each month
 - your savings building up over the year, with the monthly average and the best month
 - yearly totals, including **Essentials** (spending in categories marked essential)
+- spending per month, split by category (money back isn't counted here, so a refund never hides what you spent)
 - spending by category for the whole year
+
+![Charts on desktop](docs/screenshots/desktop-charts.png)
+
+<img src="docs/screenshots/mobile-charts.png" alt="Charts on a phone" width="260">
 
 ### Categories
 
 Rename, recolour and re-icon categories in **Settings**. Mark the essential ones there, and archive any you no longer use. Archived categories stay in your history.
 
+<img src="docs/screenshots/mobile-settings.png" alt="Category settings on a phone" width="260">
+
 ### Mobile first
 
-It's designed for a phone: a bottom tab bar, sheets that open from the bottom edge, large touch targets, and safe-area padding for devices with a notch. On a wider screen it switches to a sidebar with two columns.
+It's designed for a phone: a bottom bar with a wide **Add** button in the corner, sheets that open from the bottom edge, large touch targets, and safe-area padding for devices with a notch. On a wider screen it switches to a sidebar with two columns.
 
 ### Private by design
 

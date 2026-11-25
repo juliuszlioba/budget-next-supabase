@@ -11,7 +11,7 @@ import { addMonths, monthName, monthShort, shortDate, ymKey, type YM } from "@/l
 import { collectionDate } from "@/lib/domain/billing";
 import { formatEUR, formatEURWhole, formatPlain } from "@/lib/domain/money";
 import { setPaid } from "@/lib/actions/items";
-import { Checkbox } from "@/components/ui/checkbox";
+import { PaidCheck } from "./paid-check";
 import { CategoryGlyph, CategoryIcon } from "./category-badge";
 import { ItemSheet, type ItemSheetTarget } from "./item-sheet";
 import { MonthPicker } from "./month-picker";
@@ -370,12 +370,7 @@ function ItemRow({
 }) {
   return (
     <li className="flex items-center gap-3 rounded-2xl px-3 transition-colors hover:bg-inset">
-      <Checkbox
-        checked={item.paid}
-        onCheckedChange={(v) => onToggle(Boolean(v))}
-        aria-label={item.paid ? `Mark ${item.name} unpaid` : `Mark ${item.name} paid`}
-        className="size-5.5 rounded-md"
-      />
+      <PaidCheck paid={item.paid} name={item.name} onChange={onToggle} />
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 py-2.5 text-left">
         <CategoryIcon category={category} />
         <span className="min-w-0 flex-1">
@@ -417,12 +412,7 @@ function CreditBillRow({
   return (
     <li className={cn("rounded-2xl transition-colors", open ? "bg-inset" : "hover:bg-inset")}>
       <div className="flex items-center gap-3 px-3">
-        <Checkbox
-          checked={item.paid}
-          onCheckedChange={(v) => onToggle(item, Boolean(v))}
-          aria-label={item.paid ? `Mark ${item.name} unpaid` : `Mark ${item.name} paid`}
-          className="size-5.5 rounded-md"
-        />
+        <PaidCheck paid={item.paid} name={item.name} onChange={(v) => onToggle(item, v)} />
         <button
           type="button"
           onClick={() => onOpen({ mode: "edit", item, hasChildren: purchases.length > 0 })}
