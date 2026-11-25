@@ -30,6 +30,8 @@ type Props = {
   /** The month's "Available now" and end forecast, before this item is added or changed. */
   availableCents: number;
   forecastCents: number;
+  /** Whether a month is locked against changes (older than last month and not unlocked). */
+  isReadOnly: (ym: YM) => boolean;
   applyOptimistic: (a: { type: "upsert"; item: Item } | { type: "remove"; id: string }) => void;
 };
 
@@ -102,6 +104,7 @@ function ItemForm({
   names,
   availableCents,
   forecastCents,
+  isReadOnly,
   applyOptimistic,
   dirtyRef,
   amountRef,
@@ -163,7 +166,12 @@ function ItemForm({
   const usual = names.find((n) => n.name.toLowerCase() === name.trim().toLowerCase());
 
   // What saving does to the month screen's figures, in one line under the amount.
+  const targetYm = onCard ? cardMonth : ymOfDate(date);
+  const targetLocked = isReadOnly(targetYm);
   const impact = (() => {
+    if (targetLocked) {
+      return { text: `${monthName(targetYm.month)} ${targetYm.year} is locked. Pick a later date.`, warn: true };
+    }
     if (onCard) {
       const y = cardMonth.year !== month.year ? ` ${cardMonth.year}` : "";
       return { text: `Goes on ${monthName(cardMonth.month)}${y}'s card bill` };
@@ -200,7 +208,7 @@ function ItemForm({
     nameRef.current?.blur();
   }
 
-  const canSave = cents !== null && name.trim() !== "" && categoryId !== null && !pending;
+  const canSave = cents !== null && name.trim() !== "" && categoryId !== null && !targetLocked && !pending;
 
   function save() {
     if (cents === null || !categoryId) return;
@@ -213,7 +221,6 @@ function ItemForm({
       onCard,
       billMonth: onCard ? billMonth : null,
     };
-    const targetYm = onCard ? cardMonth : ymOfDate(date);
     const landsHere = ymKey(targetYm) === month.key;
     // The card bill item this purchase would sit under, if it's in the month on screen.
     const keepsParent = onCard && editing?.parentItemId && landsHere ? editing.parentItemId : null;
@@ -332,7 +339,7 @@ function ItemForm({
             />
           </label>
           {impact && (
-            <p className="tabular mt-2 text-xs text-muted-foreground">
+            <p className={cn("tabular mt-2 text-xs text-muted-foreground", "warn" in impact && "text-signal")}>
               {impact.cents !== undefined ? (
                 <>
                   {impact.before}

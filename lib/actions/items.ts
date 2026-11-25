@@ -7,6 +7,7 @@ import { ensureMonth } from "@/lib/dal/budget";
 import { creditBillMonthFor } from "@/lib/domain/billing";
 import { isIsoDate, isoDate, ymKey, ymOfDate, type YM } from "@/lib/domain/dates";
 import { fromCents } from "@/lib/domain/money";
+import { assertMonthsOpen, itemMonth } from "./lock";
 
 
 const cents = z.number().int().min(-99_999_999).max(99_999_999);
@@ -59,6 +60,7 @@ export async function setPaid(itemId: string, paid: boolean): Promise<ActionResu
   const id = z.uuid().parse(itemId);
   return run(async () => {
     const { supabase } = await requireUser();
+    await assertMonthsOpen(await itemMonth(supabase, id));
     const { error } = await supabase.from("items").update({ paid: Boolean(paid) }).eq("id", id);
     if (error) throw error;
   });
@@ -83,6 +85,7 @@ export async function createItem(input: ItemInput): Promise<ActionResult> {
   const v = parsed.data;
   return run(async () => {
     const { supabase } = await requireUser();
+    await assertMonthsOpen(v.onCard ? (v.billMonth ?? creditBillMonthFor(v.date)) : ymOfDate(v.date));
     if (v.onCard) {
       const { itemId, monthId } = await creditBillItemFor(supabase, v.billMonth ?? creditBillMonthFor(v.date));
       const { error } = await supabase.from("items").insert({
@@ -124,6 +127,11 @@ export async function updateItem(itemId: string, input: ItemInput): Promise<Acti
       .eq("id", id.data)
       .single();
     if (error) throw error;
+    // Both the month it leaves and the month it lands in must be open.
+    await assertMonthsOpen(
+      current.months,
+      v.onCard ? (v.billMonth ?? creditBillMonthFor(v.date)) : ymOfDate(v.date),
+    );
     const children = await supabase
       .from("items")
       .select("id", { count: "exact", head: true })
@@ -185,6 +193,7 @@ export async function deleteItem(itemId: string): Promise<ActionResult> {
   const id = z.uuid().parse(itemId);
   return run(async () => {
     const { supabase } = await requireUser();
+    await assertMonthsOpen(await itemMonth(supabase, id));
     const { error } = await supabase.from("items").delete().eq("id", id);
     if (error) throw error;
   });
@@ -208,6 +217,9 @@ export async function updateMonthMeta(input: z.infer<typeof monthMetaInput>): Pr
   const v = parsed.data;
   return run(async () => {
     const { supabase } = await requireUser();
+    const month = await supabase.from("months").select("year, month").eq("id", v.monthId).single();
+    if (month.error) throw month.error;
+    await assertMonthsOpen(month.data);
     const m = await supabase.from("months").update({ savings: fromCents(v.savingsCents) }).eq("id", v.monthId);
     if (m.error) throw m.error;
     const del = await supabase.from("income_entries").delete().eq("month_id", v.monthId);

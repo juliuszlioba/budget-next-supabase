@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, TriangleAlert, Wallet } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Lock, LockOpen, Plus, TriangleAlert, Wallet } from "lucide-react";
 import type { Bill, Category, Item, Month, NameMemory } from "@/lib/dal/types";
 import { monthTotals } from "@/lib/domain/totals";
 import { yearSeries } from "@/lib/domain/charts";
-import { addMonths, monthName, monthShort, shortDate, ymKey, type YM } from "@/lib/domain/dates";
+import { addMonths, compareYm, monthName, monthShort, shortDate, ymKey, type YM } from "@/lib/domain/dates";
 import { collectionDate } from "@/lib/domain/billing";
+import { isLockedMonth, isMonthReadOnly, UNLOCKED_MONTH_COOKIE } from "@/lib/domain/lock";
 import { formatEUR, formatEURWhole, formatPlain } from "@/lib/domain/money";
 import { setPaid } from "@/lib/actions/items";
 import { PaidCheck } from "./paid-check";
@@ -37,6 +38,13 @@ function reduce(items: Item[], a: OptimisticAction): Item[] {
     case "remove":
       return items.filter((it) => it.id !== a.id && it.parentItemId !== a.id);
   }
+}
+
+/** Tells Server Actions which locked month (if any) the user unlocked. Expires on its own after 30 minutes. */
+function writeUnlockedCookie(key: string | null) {
+  document.cookie = key
+    ? `${UNLOCKED_MONTH_COOKIE}=${key}; path=/; max-age=1800; samesite=lax`
+    : `${UNLOCKED_MONTH_COOKIE}=; path=/; max-age=0; samesite=lax`;
 }
 
 export type MonthScreenProps = {
@@ -69,21 +77,51 @@ export function MonthScreen({
   const [sheet, setSheet] = useState<ItemSheetTarget | null>(null);
   const [incomeOpen, setIncomeOpen] = useState(false);
 
+  // Months before last month are locked; one can be unlocked while you're on it.
+  const [unlockedKey, setUnlockedKey] = useState<string | null>(null);
+  if (unlockedKey !== null && unlockedKey !== month.key) setUnlockedKey(null);
+  const locked = isLockedMonth(month, today);
+  const readOnly = locked && unlockedKey !== month.key;
+  const isReadOnly = useCallback((ym: YM) => isMonthReadOnly(ym, today, unlockedKey), [today, unlockedKey]);
+  // Leaving the month (or the page) locks it again.
+  useEffect(() => {
+    writeUnlockedCookie(null);
+    return () => writeUnlockedCookie(null);
+  }, [month.key]);
+  const unlock = useCallback(() => {
+    writeUnlockedCookie(month.key);
+    setUnlockedKey(month.key);
+  }, [month.key]);
+  const relock = () => {
+    writeUnlockedCookie(null);
+    setUnlockedKey(null);
+  };
+  /** Runs `fn` if the month is open; on a locked month asks to unlock it first. */
+  const whenOpen = useCallback(
+    (fn: () => void) => {
+      if (readOnly) {
+        const label = `${monthName(month.month)} ${month.year}`;
+        if (!window.confirm(`${label} is locked so past months don't change by accident. Unlock it to make changes?`)) return;
+        unlock();
+      }
+      fn();
+    },
+    [readOnly, month.month, month.year, unlock],
+  );
+
   // The "+" in the bottom bar opens the add panel (directly, or via /?add=1 from another page).
   useEffect(() => {
-    const open = () => setSheet({ mode: "add" });
+    const open = () => whenOpen(() => setSheet({ mode: "add" }));
     window.addEventListener(ADD_ITEM_EVENT, open);
+    return () => window.removeEventListener(ADD_ITEM_EVENT, open);
+  }, [whenOpen]);
+  useEffect(() => {
     const url = new URL(window.location.href);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    if (url.searchParams.has("add")) {
-      url.searchParams.delete("add");
-      window.history.replaceState(null, "", url.pathname + url.search);
-      timer = setTimeout(open, 0);
-    }
-    return () => {
-      window.removeEventListener(ADD_ITEM_EVENT, open);
-      clearTimeout(timer);
-    };
+    if (!url.searchParams.has("add")) return;
+    url.searchParams.delete("add");
+    window.history.replaceState(null, "", url.pathname + url.search);
+    const timer = setTimeout(() => setSheet({ mode: "add" }), 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -117,13 +155,16 @@ export function MonthScreen({
     .filter((it) => it.paid)
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
 
-  const togglePaid = (it: Item, value: boolean) => {
-    startTransition(async () => {
-      applyOptimistic({ type: "paid", id: it.id, paid: value });
-      const res = await setPaid(it.id, value);
-      if (!res.ok) toast.error(res.error);
-    });
-  };
+  const togglePaid = (it: Item, value: boolean) =>
+    whenOpen(() =>
+      startTransition(async () => {
+        applyOptimistic({ type: "paid", id: it.id, paid: value });
+        const res = await setPaid(it.id, value);
+        if (!res.ok) toast.error(res.error);
+      }),
+    );
+  const openSheet = (target: ItemSheetTarget) => whenOpen(() => setSheet(target));
+  const openIncome = () => whenOpen(() => setIncomeOpen(true));
 
   const prev = addMonths(month, -1);
   const next = addMonths(month, 1);
@@ -148,7 +189,7 @@ export function MonthScreen({
         effectiveCents={totals.effective[it.id]}
         catById={catById}
         onToggle={togglePaid}
-        onOpen={(target) => setSheet(target)}
+        onOpen={openSheet}
       />
     ) : (
       <ItemRow
@@ -157,7 +198,7 @@ export function MonthScreen({
         category={catById.get(it.categoryId)}
         regular={!!it.billId && billById.has(it.billId)}
         onToggle={(v) => togglePaid(it, v)}
-        onOpen={() => setSheet({ mode: "edit", item: it, hasChildren: false })}
+        onOpen={() => openSheet({ mode: "edit", item: it, hasChildren: false })}
       />
     );
 
@@ -172,14 +213,30 @@ export function MonthScreen({
           <ChevronLeft className="size-5" />
         </Link>
         <div className="text-center">
-          <h1>
-            <MonthPicker
-              month={{ year: month.year, month: month.month }}
-              current={current}
-              firstYear={firstYear}
-              withItems={new Set(monthsWithItems)}
-            />
-          </h1>
+          <div className="flex items-center justify-center gap-1">
+            {locked && (
+              <button
+                type="button"
+                onClick={readOnly ? unlock : relock}
+                aria-label={readOnly ? "Month locked. Unlock to edit" : "Month unlocked. Lock again"}
+                title={readOnly ? "Locked. Tap to unlock" : "Unlocked. Tap to lock"}
+                className={cn(
+                  "flex size-8 items-center justify-center rounded-full transition-colors hover:bg-accent",
+                  readOnly ? "text-muted-foreground hover:text-foreground" : "text-signal",
+                )}
+              >
+                {readOnly ? <Lock className="size-4" /> : <LockOpen className="size-4" />}
+              </button>
+            )}
+            <h1>
+              <MonthPicker
+                month={{ year: month.year, month: month.month }}
+                current={current}
+                firstYear={firstYear}
+                withItems={new Set(monthsWithItems)}
+              />
+            </h1>
+          </div>
           {!isCurrent && (
             <Link href="/" className="text-xs font-medium text-signal">
               Back to this month
@@ -198,6 +255,7 @@ export function MonthScreen({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-x-12">
         <div className="flex min-w-0 flex-col gap-4">
           <BalanceCard
+            ended={compareYm(month, current) < 0}
             availableCents={totals.availableNowCents}
             forecastCents={totals.endForecastCents}
             unpaidCount={toPay.length}
@@ -205,8 +263,8 @@ export function MonthScreen({
             paidCents={paidCents}
             carryCents={totals.carryCents}
             incomeCents={totals.incomeCents + moneyBackCents}
-            onAdd={() => setSheet({ mode: "add" })}
-            onIncome={() => setIncomeOpen(true)}
+            onAdd={() => openSheet({ mode: "add" })}
+            onIncome={openIncome}
           />
 
           {top.length === 0 && (
@@ -233,8 +291,8 @@ export function MonthScreen({
 
         <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-8">
           <div className="grid grid-cols-3 divide-x divide-border px-1 py-1">
-            <Stat label="Income" value={<Money value={formatEURWhole(totals.incomeCents + totals.carryCents)} />} onClick={() => setIncomeOpen(true)} />
-            <Stat label="Saved" value={<Money value={formatEURWhole(totals.savingsCents)} />} onClick={() => setIncomeOpen(true)} />
+            <Stat label="Income" value={<Money value={formatEURWhole(totals.incomeCents + totals.carryCents)} />} onClick={openIncome} />
+            <Stat label="Saved" value={<Money value={formatEURWhole(totals.savingsCents)} />} onClick={openIncome} />
             <Stat label="Spent" value={<Money value={formatEURWhole(totals.expenseCents)} />} />
           </div>
           <CategorySpend byCategory={byCategory} catById={catById} emptyText="Nothing spent yet this month." />
@@ -250,6 +308,7 @@ export function MonthScreen({
         names={names}
         availableCents={totals.availableNowCents}
         forecastCents={totals.endForecastCents}
+        isReadOnly={isReadOnly}
         applyOptimistic={(a) => applyOptimistic(a)}
       />
       <IncomeSheet open={incomeOpen} onOpenChange={setIncomeOpen} month={month} carryCents={totals.carryCents} />
@@ -258,6 +317,8 @@ export function MonthScreen({
 }
 
 function BalanceCard(props: {
+  /** A past month: lead with what it ended with (what carried into the next month). */
+  ended: boolean;
   availableCents: number;
   forecastCents: number;
   unpaidCount: number;
@@ -268,17 +329,19 @@ function BalanceCard(props: {
   onAdd: () => void;
   onIncome: () => void;
 }) {
-  const { availableCents, forecastCents, unpaidCount, unpaidCents, paidCents, carryCents, incomeCents } = props;
+  const { ended, availableCents, forecastCents, unpaidCount, unpaidCents, paidCents, carryCents, incomeCents } = props;
+  // A past month's end figure counts its unpaid items as paid, the same figure that carries forward.
+  const heroCents = ended ? forecastCents : availableCents;
   const spentTotal = Math.max(paidCents + Math.max(unpaidCents, 0), 1);
   const paidPct = Math.max(0, Math.min(100, (paidCents / spentTotal) * 100));
   return (
     <section className="rounded-3xl bg-hero p-5 text-hero-foreground shadow-xl shadow-black/20 ring-1 ring-white/5 lg:p-6">
       <div className="flex items-center justify-between text-sm opacity-80">
-        <span>Available now</span>
+        <span>{ended ? "Ended with" : "Available now"}</span>
         <Wallet className="size-4.5 opacity-80" />
       </div>
-      <p className={cn("tabular mt-1 text-[2.6rem] leading-none font-semibold tracking-tight", availableCents < 0 && "text-signal")}>
-        <Money value={formatEUR(availableCents)} />
+      <p className={cn("tabular mt-1 text-[2.6rem] leading-none font-semibold tracking-tight", heroCents < 0 && "text-signal")}>
+        <Money value={formatEUR(heroCents)} />
       </p>
       <p className="mt-2 text-xs opacity-60">
         <Money value={formatEUR(incomeCents)} /> income
@@ -292,9 +355,13 @@ function BalanceCard(props: {
       <div className="mt-5 grid grid-cols-2">
         <div className="pr-4">
           <p className="flex items-center gap-1.5 text-xs opacity-70">
-            <i className="size-1.5 rounded-full bg-hero-foreground" /> End forecast
+            <i className="size-1.5 rounded-full bg-hero-foreground" /> {ended ? "Paid" : "End forecast"}
           </p>
-          <p className={cn("tabular mt-1 text-xl font-medium", forecastCents < 0 && "text-signal")}><Money value={formatEUR(forecastCents)} /></p>
+          {ended ? (
+            <p className="tabular mt-1 text-xl font-medium"><Money value={formatEUR(paidCents)} /></p>
+          ) : (
+            <p className={cn("tabular mt-1 text-xl font-medium", forecastCents < 0 && "text-signal")}><Money value={formatEUR(forecastCents)} /></p>
+          )}
         </div>
         <div className="border-l border-white/10 pl-4">
           <p className="flex items-center gap-1.5 text-xs opacity-70">
