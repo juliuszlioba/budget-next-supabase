@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { withToast } from "@/lib/action-toast";
 import { ArrowDown, ArrowUp, LogOut, Plus } from "lucide-react";
 import type { Category } from "@/lib/dal/types";
 import { moveCategory, saveCategory } from "@/lib/actions/categories";
@@ -38,8 +38,7 @@ export function SettingsScreen({ categories, email }: { categories: Category[]; 
 
   const move = (id: string, dir: "up" | "down") =>
     startTransition(async () => {
-      const res = await moveCategory(id, dir);
-      if (!res.ok) toast.error(res.error);
+      await withToast(moveCategory(id, dir));
     });
 
   return (
@@ -132,9 +131,11 @@ function CategoryForm({ category, onDone }: { category: Category | null; onDone:
 
   function save() {
     startTransition(async () => {
-      const res = await saveCategory({ id: category?.id ?? null, name: name.trim(), icon, color, isEssential, archived });
-      if (!res.ok) toast.error(res.error);
-      else onDone();
+      const saved = await withToast(
+        saveCategory({ id: category?.id ?? null, name: name.trim(), icon, color, isEssential, archived }),
+        category ? `Saved ${name.trim()}` : `Added ${name.trim()}`,
+      );
+      if (saved) onDone();
     });
   }
 

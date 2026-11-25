@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { withToast } from "@/lib/action-toast";
 import { ChevronDown, ChevronLeft, ChevronRight, Lock, LockOpen, Plus, TriangleAlert, Wallet } from "lucide-react";
 import type { Bill, Category, Item, Month, NameMemory } from "@/lib/dal/types";
 import { monthTotals } from "@/lib/domain/totals";
@@ -88,25 +89,42 @@ export function MonthScreen({
     writeUnlockedCookie(null);
     return () => writeUnlockedCookie(null);
   }, [month.key]);
+  const monthLabel = `${monthName(month.month)} ${month.year}`;
   const unlock = useCallback(() => {
     writeUnlockedCookie(month.key);
     setUnlockedKey(month.key);
-  }, [month.key]);
+    toast.info(`${monthLabel} unlocked`, {
+      id: "month-lock",
+      description: "It locks again when you leave this month.",
+      icon: <LockOpen className="size-4" strokeWidth={2} />,
+    });
+  }, [month.key, monthLabel]);
   const relock = () => {
     writeUnlockedCookie(null);
     setUnlockedKey(null);
+    toast.info(`${monthLabel} locked`, { id: "month-lock", icon: <Lock className="size-4" strokeWidth={2} /> });
   };
   /** Runs `fn` if the month is open; on a locked month asks to unlock it first. */
   const whenOpen = useCallback(
     (fn: () => void) => {
       if (readOnly) {
-        const label = `${monthName(month.month)} ${month.year}`;
-        if (!window.confirm(`${label} is locked so past months don't change by accident. Unlock it to make changes?`)) return;
-        unlock();
+        toast.warning(`${monthLabel} is locked`, {
+          id: "month-locked",
+          icon: <Lock className="size-4" strokeWidth={2} />,
+          description: "Past months are locked so they don't change by accident.",
+          action: {
+            label: "Unlock",
+            onClick: () => {
+              unlock();
+              fn();
+            },
+          },
+        });
+        return;
       }
       fn();
     },
-    [readOnly, month.month, month.year, unlock],
+    [readOnly, monthLabel, unlock],
   );
 
   // The "+" in the bottom bar opens the add panel (directly, or via /?add=1 from another page).
@@ -159,8 +177,7 @@ export function MonthScreen({
     whenOpen(() =>
       startTransition(async () => {
         applyOptimistic({ type: "paid", id: it.id, paid: value });
-        const res = await setPaid(it.id, value);
-        if (!res.ok) toast.error(res.error);
+        await withToast(setPaid(it.id, value));
       }),
     );
   const openSheet = (target: ItemSheetTarget) => whenOpen(() => setSheet(target));

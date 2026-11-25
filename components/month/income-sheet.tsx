@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { withToast } from "@/lib/action-toast";
 import { Plus, Trash2 } from "lucide-react";
 import type { Month } from "@/lib/dal/types";
 import { updateMonthMeta } from "@/lib/actions/items";
@@ -64,13 +64,15 @@ function IncomeForm({ month, carryCents, onDone }: { month: Month; carryCents: n
   function save() {
     if (!valid || savingsCents === null) return;
     startTransition(async () => {
-      const res = await updateMonthMeta({
-        monthId: month.id,
-        savingsCents,
-        income: parsedLines.map((l) => ({ label: l.label.trim(), amountCents: l.cents!, isRecurring: l.isRecurring })),
-      });
-      if (!res.ok) toast.error(res.error);
-      else onDone();
+      const saved = await withToast(
+        updateMonthMeta({
+          monthId: month.id,
+          savingsCents,
+          income: parsedLines.map((l) => ({ label: l.label.trim(), amountCents: l.cents!, isRecurring: l.isRecurring })),
+        }),
+        "Income and savings saved",
+      );
+      if (saved) onDone();
     });
   }
 

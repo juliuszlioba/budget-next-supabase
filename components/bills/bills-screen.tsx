@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { withToast } from "@/lib/action-toast";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import type { Bill, Category } from "@/lib/dal/types";
 import { moveBill, saveBill } from "@/lib/actions/bills";
@@ -29,8 +29,7 @@ export function BillsScreen({ bills, categories }: { bills: Bill[]; categories: 
 
   const move = (id: string, dir: "up" | "down") =>
     startTransition(async () => {
-      const res = await moveBill(id, dir);
-      if (!res.ok) toast.error(res.error);
+      await withToast(moveBill(id, dir));
     });
 
   const row = (b: Bill, i: number, list: Bill[]) => (
@@ -126,12 +125,13 @@ function BillForm({ bill, categories, onDone }: { bill: Bill | null; categories:
   function save() {
     if (!valid || cents === null || !categoryId) return;
     startTransition(async () => {
-      const res = await saveBill({ id: bill?.id ?? null, name: name.trim(), amountCents: cents, categoryId, active });
-      if (!res.ok) toast.error(res.error);
-      else {
-        toast.success("Saved. Unpaid entries from this month on were updated.");
-        onDone();
-      }
+      const saved = await withToast(
+        saveBill({ id: bill?.id ?? null, name: name.trim(), amountCents: cents, categoryId, active }),
+        bill
+          ? `Saved ${name.trim()}. Unpaid entries from this month on were updated.`
+          : `Added ${name.trim()} to your regular bills.`,
+      );
+      if (saved) onDone();
     });
   }
 

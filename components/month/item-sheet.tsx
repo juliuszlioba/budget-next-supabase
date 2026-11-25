@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { withToast } from "@/lib/action-toast";
 import { History } from "lucide-react";
 import type { Category, Item, Month, NameMemory } from "@/lib/dal/types";
 import { createItem, deleteItem, updateItem, type ItemInput } from "@/lib/actions/items";
@@ -249,17 +249,12 @@ function ItemForm({
         applyOptimistic({ type: "remove", id: editing.id });
       }
       onClose();
-      const res = editing ? await updateItem(editing.id, input) : await createItem(input);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      if (!landsHere || (onCard && !keepsParent)) {
-        const where = onCard
-          ? `${monthName(targetYm.month)}'s card bill`
-          : `${monthName(targetYm.month)} ${targetYm.year}`;
-        toast.success(`${editing ? "Moved" : "Added"} to ${where}`);
-      }
+      const elsewhere = !landsHere || (onCard && !keepsParent);
+      const where = onCard ? `${monthName(targetYm.month)}'s card bill` : `${monthName(targetYm.month)} ${targetYm.year}`;
+      const success = elsewhere
+        ? `${editing ? "Moved" : "Added"} ${input.name} to ${where}`
+        : `${editing ? "Saved" : "Added"} ${input.name}`;
+      await withToast(editing ? updateItem(editing.id, input) : createItem(input), success);
     });
   }
 
@@ -272,8 +267,7 @@ function ItemForm({
     startTransition(async () => {
       applyOptimistic({ type: "remove", id: editing.id });
       onClose();
-      const res = await deleteItem(editing.id);
-      if (!res.ok) toast.error(res.error);
+      await withToast(deleteItem(editing.id), `Deleted ${editing.name}`);
     });
   }
 

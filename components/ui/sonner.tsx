@@ -1,45 +1,23 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { Check, Info, Loader2, TriangleAlert, X } from "lucide-react"
 
+// Glyphs sit inside a tinted tile (see `.toaster` in globals.css), like the category icons on list rows.
+const glyph = "size-4"
+
+/** App toasts: styled in globals.css to match the cards, icon tiles and pill buttons. */
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="dark"
       className="toaster group"
       icons={{
-        success: (
-          <CircleCheckIcon className="size-4" />
-        ),
-        info: (
-          <InfoIcon className="size-4" />
-        ),
-        warning: (
-          <TriangleAlertIcon className="size-4" />
-        ),
-        error: (
-          <OctagonXIcon className="size-4" />
-        ),
-        loading: (
-          <Loader2Icon className="size-4 animate-spin" />
-        ),
-      }}
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
-        } as React.CSSProperties
-      }
-      toastOptions={{
-        classNames: {
-          toast: "cn-toast",
-        },
+        success: <Check className={glyph} strokeWidth={2.4} />,
+        info: <Info className={glyph} strokeWidth={2} />,
+        warning: <TriangleAlert className={glyph} strokeWidth={2} />,
+        error: <X className={glyph} strokeWidth={2.4} />,
+        loading: <Loader2 className={`${glyph} animate-spin`} strokeWidth={2} />,
       }}
       {...props}
     />

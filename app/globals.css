@@ -182,3 +182,82 @@
   font-weight: 500;
   color: var(--muted-foreground);
 }
+
+/*
+ * Toasts (sonner). They float over the page like a sheet: the raised popover grey, the card
+ * radius and hairline ring, a deep shadow. The type shows in a tinted icon tile, like the
+ * category tiles on list rows; the action is the same amber pill as "Add item".
+ * The `.toaster[data-sonner-theme]` prefix outranks sonner's injected styles.
+ */
+.toaster[data-sonner-theme] {
+  --width: 380px;
+  --gap: 10px;
+  --tone: var(--muted-foreground);
+  font-family: var(--font-sans);
+}
+.toaster[data-sonner-theme] [data-sonner-toast][data-styled="true"] {
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 12px;
+  min-height: 56px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 3.4);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 14px 36px -10px rgb(0 0 0 / 0.6);
+  font-size: 14px;
+}
+.toaster [data-sonner-toast][data-type="success"] { --tone: var(--primary); }
+.toaster [data-sonner-toast][data-type="error"],
+.toaster [data-sonner-toast][data-type="warning"] { --tone: var(--signal); }
+
+.toaster[data-sonner-theme] [data-sonner-toast][data-styled="true"] [data-icon] {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  justify-content: center;
+  border-radius: calc(var(--radius) * 2);
+  color: var(--tone);
+  background: color-mix(in oklab, var(--tone) 16%, transparent);
+}
+.toaster[data-sonner-theme] [data-sonner-toast][data-styled="true"] [data-icon] svg {
+  margin: 0;
+}
+.toaster[data-sonner-theme] [data-sonner-toast][data-styled="true"] [data-content] {
+  gap: 1px;
+}
+.toaster[data-sonner-theme] [data-sonner-toast][data-styled="true"] [data-title] {
+  font-weight: 500;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+.toaster[data-sonner-theme] [data-sonner-toast][data-styled="true"] [data-description] {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  text-wrap: pretty;
+}
+.toaster[data-sonner-theme] [data-sonner-toast][data-styled="true"] [data-button] {
+  height: 32px;
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  transition: transform 0.15s, background-color 0.15s;
+}
+.toaster[data-sonner-theme] [data-sonner-toast][data-styled="true"] [data-button]:active {
+  transform: scale(0.97);
+}
+.toaster[data-sonner-theme] [data-sonner-toast][data-styled="true"] [data-button]:focus-visible {
+  box-shadow: 0 0 0 2px var(--popover), 0 0 0 4px var(--ring);
+}
+.toaster[data-sonner-theme] [data-sonner-toast][data-styled="true"] [data-cancel] {
+  background: rgb(255 255 255 / 0.08);
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+}
