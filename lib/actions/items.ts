@@ -66,6 +66,27 @@ export async function setPaid(itemId: string, paid: boolean): Promise<ActionResu
   });
 }
 
+/**
+ * Turns a confirmed card bill back into an estimate, so it grows to cover its logged purchases
+ * (used when the purchases exceed the statement figure).
+ */
+export async function reestimateCreditBill(itemId: string): Promise<ActionResult> {
+  const id = z.uuid().parse(itemId);
+  return run(async () => {
+    const { supabase } = await requireUser();
+    await assertMonthsOpen(await itemMonth(supabase, id));
+    const { data: item, error } = await supabase
+      .from("items")
+      .select("parent_item_id, bills(is_credit_card)")
+      .eq("id", id)
+      .single();
+    if (error) throw error;
+    if (item.parent_item_id || !item.bills?.is_credit_card) throw new Error("Only a card bill can be estimated.");
+    const r = await supabase.from("items").update({ is_estimate: true }).eq("id", id);
+    if (r.error) throw r.error;
+  });
+}
+
 const itemInput = z.object({
   name: z.string().trim().min(1, "Give it a name.").max(120),
   amountCents: cents,

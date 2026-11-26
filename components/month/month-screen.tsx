@@ -12,7 +12,7 @@ import { addMonths, compareYm, monthName, monthShort, shortDate, ymKey, type YM 
 import { collectionDate } from "@/lib/domain/billing";
 import { isLockedMonth, isMonthReadOnly, UNLOCKED_MONTH_COOKIE } from "@/lib/domain/lock";
 import { formatEUR, formatEURWhole, formatPlain } from "@/lib/domain/money";
-import { setPaid } from "@/lib/actions/items";
+import { reestimateCreditBill, setPaid } from "@/lib/actions/items";
 import { PaidCheck } from "./paid-check";
 import { CategoryGlyph, CategoryIcon } from "./category-badge";
 import { ItemSheet, type ItemSheetTarget } from "./item-sheet";
@@ -77,6 +77,13 @@ export function MonthScreen({
   const [, startTransition] = useTransition();
   const [sheet, setSheet] = useState<ItemSheetTarget | null>(null);
   const [incomeOpen, setIncomeOpen] = useState(false);
+
+  // A future month's carry-over is only a forecast; it can be left out to see the month on its own.
+  const upcoming = compareYm(month, current) > 0;
+  const [skipCarryKey, setSkipCarryKey] = useState<string | null>(null);
+  if (skipCarryKey !== null && skipCarryKey !== month.key) setSkipCarryKey(null);
+  const skipCarry = upcoming && skipCarryKey === month.key;
+  const toggleCarry = () => setSkipCarryKey(skipCarry ? null : month.key);
 
   // Months before last month are locked; one can be unlocked while you're on it.
   const [unlockedKey, setUnlockedKey] = useState<string | null>(null);
@@ -151,11 +158,11 @@ export function MonthScreen({
       monthTotals({
         incomeCents: month.incomeCents,
         savingsCents: month.savingsCents,
-        carryCents: month.totals.carryCents,
+        carryCents: skipCarry ? 0 : month.totals.carryCents,
         items,
         essentialCategoryIds: essentialIds,
       }),
-    [items, month, essentialIds],
+    [items, month, essentialIds, skipCarry],
   );
 
   const byCategory = useMemo(
@@ -178,6 +185,13 @@ export function MonthScreen({
       startTransition(async () => {
         applyOptimistic({ type: "paid", id: it.id, paid: value });
         await withToast(setPaid(it.id, value));
+      }),
+    );
+  const reestimate = (it: Item) =>
+    whenOpen(() =>
+      startTransition(async () => {
+        applyOptimistic({ type: "upsert", item: { ...it, isEstimate: true } });
+        await withToast(reestimateCreditBill(it.id), "Card bill estimated from purchases");
       }),
     );
   const openSheet = (target: ItemSheetTarget) => whenOpen(() => setSheet(target));
@@ -207,6 +221,7 @@ export function MonthScreen({
         catById={catById}
         onToggle={togglePaid}
         onOpen={openSheet}
+        onReestimate={reestimate}
       />
     ) : (
       <ItemRow
@@ -273,12 +288,16 @@ export function MonthScreen({
         <div className="flex min-w-0 flex-col gap-4">
           <BalanceCard
             ended={compareYm(month, current) < 0}
+            upcoming={upcoming}
+            skipCarry={skipCarry}
+            onToggleCarry={toggleCarry}
+            locked={locked}
             availableCents={totals.availableNowCents}
             forecastCents={totals.endForecastCents}
             unpaidCount={toPay.length}
             unpaidCents={outgoingCents(toPay)}
             paidCents={paidCents}
-            carryCents={totals.carryCents}
+            carryCents={month.totals.carryCents}
             incomeCents={totals.incomeCents + moneyBackCents}
             onAdd={() => openSheet({ mode: "add" })}
             onIncome={openIncome}
@@ -328,7 +347,7 @@ export function MonthScreen({
         isReadOnly={isReadOnly}
         applyOptimistic={(a) => applyOptimistic(a)}
       />
-      <IncomeSheet open={incomeOpen} onOpenChange={setIncomeOpen} month={month} carryCents={totals.carryCents} />
+      <IncomeSheet open={incomeOpen} onOpenChange={setIncomeOpen} month={month} carryCents={month.totals.carryCents} />
     </div>
   );
 }
@@ -336,6 +355,13 @@ export function MonthScreen({
 function BalanceCard(props: {
   /** A past month: lead with what it ended with (what carried into the next month). */
   ended: boolean;
+  /** A future month: nothing has arrived yet, so the figure is what will be available. */
+  upcoming: boolean;
+  /** The carry-over is left out of the figures (future months only). */
+  skipCarry: boolean;
+  onToggleCarry: () => void;
+  /** A locked month: its "All paid" €0.00 figure says nothing, so it is hidden. */
+  locked: boolean;
   availableCents: number;
   forecastCents: number;
   unpaidCount: number;
@@ -346,7 +372,7 @@ function BalanceCard(props: {
   onAdd: () => void;
   onIncome: () => void;
 }) {
-  const { ended, availableCents, forecastCents, unpaidCount, unpaidCents, paidCents, carryCents, incomeCents } = props;
+  const { ended, upcoming, skipCarry, locked, availableCents, forecastCents, unpaidCount, unpaidCents, paidCents, carryCents, incomeCents } = props;
   // A past month's end figure counts its unpaid items as paid, the same figure that carries forward.
   const heroCents = ended ? forecastCents : availableCents;
   const spentTotal = Math.max(paidCents + Math.max(unpaidCents, 0), 1);
@@ -354,7 +380,7 @@ function BalanceCard(props: {
   return (
     <section className="rounded-3xl bg-hero p-5 text-hero-foreground shadow-xl shadow-black/20 ring-1 ring-white/5 lg:p-6">
       <div className="flex items-center justify-between text-sm opacity-80">
-        <span>{ended ? "Ended with" : "Available now"}</span>
+        <span>{ended ? "Ended with" : upcoming ? "Will be available" : "Available now"}</span>
         <Wallet className="size-4.5 opacity-80" />
       </div>
       <p className={cn("tabular mt-1 text-[2.6rem] leading-none font-semibold tracking-tight", heroCents < 0 && "text-signal")}>
@@ -363,9 +389,27 @@ function BalanceCard(props: {
       <p className="mt-2 text-xs opacity-60">
         <Money value={formatEUR(incomeCents)} /> income
         {carryCents ? (
-          <>
-            , <Money value={formatEUR(carryCents)} /> carried over
-          </>
+          upcoming ? (
+            <>
+              ,{" "}
+              <button
+                type="button"
+                onClick={props.onToggleCarry}
+                aria-pressed={!skipCarry}
+                title={skipCarry ? "Add the carry-over back" : "Leave the carry-over out"}
+                className={cn(
+                  "underline decoration-dotted decoration-from-font underline-offset-2 transition-opacity hover:opacity-100",
+                  skipCarry && "line-through decoration-solid",
+                )}
+              >
+                <Money value={formatEUR(carryCents)} /> carried over
+              </button>
+            </>
+          ) : (
+            <>
+              , <Money value={formatEUR(carryCents)} /> carried over
+            </>
+          )
         ) : null}
       </p>
 
@@ -380,12 +424,14 @@ function BalanceCard(props: {
             <p className={cn("tabular mt-1 text-xl font-medium", forecastCents < 0 && "text-signal")}><Money value={formatEUR(forecastCents)} /></p>
           )}
         </div>
-        <div className="border-l border-white/10 pl-4">
-          <p className="flex items-center gap-1.5 text-xs opacity-70">
-            <i className="size-1.5 rounded-full bg-signal" /> {unpaidCount === 0 ? "All paid" : `${unpaidCount} to pay`}
-          </p>
-          <p className="tabular mt-1 text-xl font-medium"><Money value={formatEUR(unpaidCents)} /></p>
-        </div>
+        {!(locked && unpaidCount === 0) && (
+          <div className="border-l border-white/10 pl-4">
+            <p className="flex items-center gap-1.5 text-xs opacity-70">
+              <i className="size-1.5 rounded-full bg-signal" /> {unpaidCount === 0 ? "All paid" : `${unpaidCount} to pay`}
+            </p>
+            <p className="tabular mt-1 text-xl font-medium"><Money value={formatEUR(unpaidCents)} /></p>
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex h-1 overflow-hidden rounded-full bg-white/10" aria-hidden>
@@ -495,6 +541,7 @@ function CreditBillRow({
   catById,
   onToggle,
   onOpen,
+  onReestimate,
 }: {
   item: Item;
   purchases: Item[];
@@ -503,6 +550,7 @@ function CreditBillRow({
   catById: Map<string, Category>;
   onToggle: (it: Item, paid: boolean) => void;
   onOpen: (t: ItemSheetTarget) => void;
+  onReestimate: (it: Item) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [y, m] = item.date.split("-").map(Number);
@@ -566,6 +614,19 @@ function CreditBillRow({
             <span className="flex-1">{info.overTracked ? "Purchases exceed the statement" : "Untracked"}</span>
             <span className="tabular">{formatPlain(info.untrackedCents)}</span>
           </li>
+          {info.overTracked && (
+            <li className="flex items-center gap-2 pb-1.5 text-xs text-muted-foreground">
+              <span aria-hidden className="w-4" />
+              <span className="flex-1">The bill is lower than what you logged on the card.</span>
+              <button
+                type="button"
+                onClick={() => onReestimate(item)}
+                className="shrink-0 rounded-full bg-signal-soft px-2.5 py-1 font-semibold text-signal hover:opacity-80"
+              >
+                Estimate again
+              </button>
+            </li>
+          )}
           {purchases.length === 0 && (
             <li className="pb-1 text-xs text-muted-foreground">
               Add a purchase with “On credit card” switched on to see it here.

@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { AppLogo } from "@/components/app-logo";
 import { DemoBanner } from "@/components/demo-banner";
 import { BottomTabs, BottomTabsView, SideNav, SideNavView } from "@/components/app-nav";
+import { LogOut } from "lucide-react";
+import { logout } from "@/lib/actions/auth";
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
@@ -20,6 +22,15 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={<SideNavView />}>
           <SideNav />
         </Suspense>
+        <form action={logout} className="mt-auto">
+          <button
+            type="submit"
+            className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <LogOut className="size-4.5" />
+            Log out
+          </button>
+        </form>
       </aside>
       <main id="main" tabIndex={-1} className="min-w-0 flex-1 outline-none pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-10">
         <Suspense fallback={null}>
