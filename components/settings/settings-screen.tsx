@@ -97,6 +97,12 @@ export function SettingsScreen({ categories, email }: { categories: Category[]; 
         </form>
       </div>
 
+      <p className="mt-10 mb-8 text-center text-xs text-muted-foreground/70">
+        Version {process.env.NEXT_PUBLIC_APP_VERSION}
+        {process.env.NEXT_PUBLIC_COMMIT_SHA && <> ({process.env.NEXT_PUBLIC_COMMIT_SHA})</>}, built{" "}
+        {process.env.NEXT_PUBLIC_BUILD_DATE}
+      </p>
+
       <CategorySheet editing={editing} onClose={() => setEditing(null)} />
     </div>
   );
